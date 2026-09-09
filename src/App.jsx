@@ -88,7 +88,10 @@ export default function App() {
     let cancelled = false;
     loadLeague()
       .then((loaded) => {
-        if (!cancelled) setLeague(loaded);
+        if (cancelled) return;
+        // Lo que viene del servidor no hay que volver a guardarlo.
+        skipNextSave.current = true;
+        setLeague(loaded);
       })
       .catch((err) => {
         if (!cancelled) showToast(err.message || 'No se pudo cargar la liga.', 'error');
@@ -114,20 +117,26 @@ export default function App() {
     });
   }, [showToast]);
 
-  // Guarda cada cambio, salvo el que acabamos de recibir por la carga inicial o en vivo.
+  // `canEdit` se lee por referencia: si estuviera en las dependencias, iniciar
+  // sesión dispararía un guardado sin que nadie haya cambiado nada.
+  const canEditRef = useRef(canEdit);
   useEffect(() => {
-    if (!hydrated.current) {
-      hydrated.current = true;
-      lastSaved.current = JSON.stringify(league);
-      return;
-    }
-    if (skipNextSave.current) {
-      skipNextSave.current = false;
-      lastSaved.current = JSON.stringify(league);
-      return;
-    }
+    canEditRef.current = canEdit;
+  }, [canEdit]);
+
+  // Guarda cada cambio propio. No guarda: el render inicial (liga vacía), lo que
+  // llega del servidor, ni nada en modo solo lectura — quien no tiene la clave
+  // no puede haber hecho un cambio legítimo.
+  useEffect(() => {
+    const debeGuardar = hydrated.current && !skipNextSave.current && canEditRef.current;
+
+    hydrated.current = true;
+    skipNextSave.current = false;
     lastSaved.current = JSON.stringify(league);
-    saveLeague(league).catch((err) => showToast(err.message || 'No se pudo guardar.', 'error'));
+
+    if (debeGuardar) {
+      saveLeague(league).catch((err) => showToast(err.message || 'No se pudo guardar.', 'error'));
+    }
   }, [league, showToast]);
 
   useEffect(() => {
