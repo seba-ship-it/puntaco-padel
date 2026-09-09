@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Check, Trash2, Plus } from 'lucide-react';
+import { Check, Trash2, Plus, Lock } from 'lucide-react';
 import { ProgressBar, RulesPanel, SectionTitle, PAIR_COLORS, themeFor } from '../components/ui.jsx';
 import { MATCHES_PER_FECHA, countPlayed } from '../lib/scoring.js';
 
@@ -7,7 +7,16 @@ import { MATCHES_PER_FECHA, countPlayed } from '../lib/scoring.js';
  * Calendario e historial en una sola vista: cada fecha muestra su estado y
  * desde ahí se carga o se corrige.
  */
-export default function Fechas({ group, league, drafts, scoring, onOpenFecha, onDeleteFecha, onAddFecha }) {
+export default function Fechas({
+  group,
+  league,
+  drafts,
+  scoring,
+  canEdit = true,
+  onOpenFecha,
+  onDeleteFecha,
+  onAddFecha,
+}) {
   const [rulesOpen, setRulesOpen] = useState(false);
   const theme = themeFor(group.id);
 
@@ -18,15 +27,21 @@ export default function Fechas({ group, league, drafts, scoring, onOpenFecha, on
       <SectionTitle
         title="Fechas"
         accentText={{ text: group.name, className: theme.text }}
-        subtitle="Tocá una fecha para cargar o corregir sus resultados"
+        subtitle={
+          canEdit
+            ? 'Tocá una fecha para cargar o corregir sus resultados'
+            : 'Estás viendo los resultados. Para cargar hace falta la clave.'
+        }
         right={
-          <button
-            onClick={onAddFecha}
-            className="px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 bg-slate-800 text-slate-200 hover:bg-slate-700 transition-colors"
-          >
-            <Plus className="w-3.5 h-3.5" />
-            Agregar fecha
-          </button>
+          canEdit && (
+            <button
+              onClick={onAddFecha}
+              className="px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 bg-slate-800 text-slate-200 hover:bg-slate-700 transition-colors"
+            >
+              <Plus className="w-3.5 h-3.5" />
+              Agregar fecha
+            </button>
+          )
         }
       />
 
@@ -73,11 +88,17 @@ export default function Fechas({ group, league, drafts, scoring, onOpenFecha, on
               <div className="p-3 border-t border-slate-800 flex gap-2">
                 <button
                   onClick={() => onOpenFecha(group.id, fecha.num)}
-                  className={`flex-1 py-2 rounded-lg text-xs font-bold text-slate-950 ${theme.bg} hover:opacity-90 transition-opacity`}
+                  title={canEdit ? undefined : 'Necesitás la clave para cargar resultados'}
+                  className={`flex-1 py-2 rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 transition-opacity ${
+                    canEdit
+                      ? `text-slate-950 ${theme.bg} hover:opacity-90`
+                      : 'bg-slate-800 text-slate-500 cursor-not-allowed'
+                  }`}
                 >
+                  {!canEdit && <Lock className="w-3.5 h-3.5" />}
                   {played > 0 || hasDraft ? 'Editar resultados' : 'Cargar resultados'}
                 </button>
-                {(played > 0 || hasDraft) && (
+                {canEdit && (played > 0 || hasDraft) && (
                   <button
                     onClick={() => onDeleteFecha(group.id, fecha.num)}
                     title={`Borrar los resultados de la fecha ${fecha.num}`}

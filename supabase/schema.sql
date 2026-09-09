@@ -26,6 +26,10 @@ create table if not exists public.league_state (
 
 alter table public.league_state enable row level security;
 
+-- Permisos de tabla (además de las políticas de abajo).
+grant select on public.league_state to anon, authenticated;
+grant insert, update on public.league_state to authenticated;
+
 -- Cualquiera con el link puede VER la liga (tabla, fechas, perfiles).
 drop policy if exists "Lectura pública" on public.league_state;
 create policy "Lectura pública"
@@ -57,6 +61,16 @@ drop trigger if exists trg_touch_league_state on public.league_state;
 create trigger trg_touch_league_state
   before update on public.league_state
   for each row execute function public.touch_league_state();
+
+-- Replicación en vivo: si alguien guarda desde otro dispositivo, las pantallas
+-- abiertas se actualizan solas. Sin esto la suscripción no recibe nada.
+do $$
+begin
+  alter publication supabase_realtime add table public.league_state;
+exception
+  when duplicate_object then null; -- ya estaba agregada
+end;
+$$;
 
 -- ----------------------------------------------------------------------------
 -- Semilla: la Fecha 1 de ambos grupos, ya cargada y verificada contra la

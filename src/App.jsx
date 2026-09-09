@@ -43,6 +43,7 @@ export default function App() {
   const [syncing, setSyncing] = useState(true);
   const hydrated = useRef(false);
   const skipNextSave = useRef(false);
+  const lastSaved = useRef(null); // para reconocer el eco de nuestro propio guardado
 
   const [drafts, setDrafts] = useState(() => {
     try {
@@ -103,9 +104,13 @@ export default function App() {
   // Cambios en vivo: si otra persona guarda desde otro dispositivo, esta pantalla se actualiza sola.
   useEffect(() => {
     return subscribeToLeague((next) => {
+      // Supabase también nos devuelve nuestros propios cambios. Si lo que llega
+      // es exactamente lo último que guardamos, es el eco: no hay nada que hacer.
+      if (JSON.stringify(next) === lastSaved.current) return;
+
       skipNextSave.current = true;
       setLeague(next);
-      showToast('La liga se actualizó (alguien cargó algo desde otro dispositivo).');
+      showToast('La liga se actualizó desde otro dispositivo.');
     });
   }, [showToast]);
 
@@ -113,12 +118,15 @@ export default function App() {
   useEffect(() => {
     if (!hydrated.current) {
       hydrated.current = true;
+      lastSaved.current = JSON.stringify(league);
       return;
     }
     if (skipNextSave.current) {
       skipNextSave.current = false;
+      lastSaved.current = JSON.stringify(league);
       return;
     }
+    lastSaved.current = JSON.stringify(league);
     saveLeague(league).catch((err) => showToast(err.message || 'No se pudo guardar.', 'error'));
   }, [league, showToast]);
 
@@ -552,6 +560,7 @@ export default function App() {
             league={league}
             drafts={drafts}
             scoring={league.scoring}
+            canEdit={canEdit}
             onOpenFecha={requireAuth(openFecha)}
             onDeleteFecha={requireAuth(handleDeleteResults)}
             onAddFecha={requireAuth(() => handleAddFecha(group.id))}
