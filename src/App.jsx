@@ -224,6 +224,31 @@ export default function App() {
     }));
   };
 
+  /** Cambia quién jugó un puesto SOLO en este partido (el apoyo entra por partido). */
+  const handleLineupChange = (matchId, pairIdx, field, nextSlot) => {
+    updateDraft(editingKey, (d) => ({
+      ...d,
+      matches: d.matches.map((m) => {
+        if (m.id !== matchId) return m;
+        const lineup = { ...(m.lineup || {}) };
+        lineup[pairIdx] = { ...(lineup[pairIdx] || {}), [field]: nextSlot };
+        return { ...m, lineup };
+      }),
+    }));
+  };
+
+  /** Vuelve este partido a la formación por defecto de la fecha. */
+  const handleResetLineup = (matchId) => {
+    updateDraft(editingKey, (d) => ({
+      ...d,
+      matches: d.matches.map((m) => {
+        if (m.id !== matchId) return m;
+        const { lineup, ...rest } = m;
+        return rest;
+      }),
+    }));
+  };
+
   const handleSaveFecha = () => {
     if (!editing || !editingKey) return;
     if (!canEdit) {
@@ -578,6 +603,8 @@ export default function App() {
             onSlotChange={handleSlotChange}
             onGamesChange={handleGamesChange}
             onToggleTieBreak={handleToggleTieBreak}
+            onLineupChange={handleLineupChange}
+            onResetLineup={handleResetLineup}
             onSave={handleSaveFecha}
             onDiscard={handleDiscardDraft}
           />

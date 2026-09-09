@@ -1,7 +1,7 @@
-import React from 'react';
-import { X, Check, ChevronDown, AlertTriangle, Zap } from 'lucide-react';
+import React, { useState } from 'react';
+import { X, Check, ChevronDown, AlertTriangle, Zap, Users } from 'lucide-react';
 import { ProgressBar, PAIR_COLORS, themeFor } from '../components/ui.jsx';
-import { MATCHES_PER_FECHA, resolveMatch, slotKind, countPlayed } from '../lib/scoring.js';
+import { MATCHES_PER_FECHA, resolveMatch, slotKind, countPlayed, slotsForMatch } from '../lib/scoring.js';
 
 /**
  * Carga de resultados de una fecha.
@@ -17,6 +17,8 @@ export default function LoadFecha({
   onSlotChange,
   onGamesChange,
   onToggleTieBreak,
+  onLineupChange,
+  onResetLineup,
   onSave,
   onDiscard,
 }) {
@@ -28,11 +30,6 @@ export default function LoadFecha({
     if (!slot) return '—';
     if (!slot.playerId) return slot.guestName?.trim() || 'Invitado';
     return allPlayers.find((p) => p.id === slot.playerId)?.name || '—';
-  };
-
-  const pairLabel = (pairIdx) => {
-    const pair = draft.pairs[pairIdx];
-    return `${nameOf(pair?.drive)} / ${nameOf(pair?.reves)}`;
   };
 
   return (
@@ -113,13 +110,15 @@ export default function LoadFecha({
             key={match.id}
             index={i}
             match={match}
-            label1={pairLabel(match.p1Idx)}
-            label2={pairLabel(match.p2Idx)}
-            color1={PAIR_COLORS[match.p1Idx]}
-            color2={PAIR_COLORS[match.p2Idx]}
-            tieBreakPoints={scoring.derrotaTieBreak}
+            draft={draft}
+            players={group.players}
+            otherGroup={otherGroup}
+            scoring={scoring}
+            nameOf={nameOf}
             onGamesChange={(field, value) => onGamesChange(match.id, field, value)}
             onToggleTieBreak={() => onToggleTieBreak(match.id)}
+            onLineupChange={(pairIdx, field, slot) => onLineupChange(match.id, pairIdx, field, slot)}
+            onResetLineup={() => onResetLineup(match.id)}
           />
         ))}
       </div>
@@ -213,11 +212,37 @@ function SlotPicker({ label, roleColor, slot, players, otherGroup, scoring, onCh
   );
 }
 
-function MatchRow({ index, match, label1, label2, color1, color2, tieBreakPoints, onGamesChange, onToggleTieBreak }) {
+/**
+ * Una fila de partido. Además del marcador, permite cambiar quién jugó
+ * SOLO en este partido: el apoyo suele entrar para un partido suelto, no
+ * para toda la fecha.
+ */
+function MatchRow({
+  index,
+  match,
+  draft,
+  players,
+  otherGroup,
+  scoring,
+  nameOf,
+  onGamesChange,
+  onToggleTieBreak,
+  onLineupChange,
+  onResetLineup,
+}) {
+  const [editing, setEditing] = useState(false);
   const r = resolveMatch(match);
+  const hasLineup = Boolean(match.lineup && Object.keys(match.lineup).length > 0);
 
   const sideClass = (idx) =>
     r.played && r.winnerIdx === idx ? 'text-white font-bold' : r.played ? 'text-slate-500' : 'text-slate-300';
+
+  const label = (pairIdx) => slotsForMatch(draft, pairIdx, match).map(nameOf).join(' / ');
+
+  const sides = [
+    { pairIdx: match.p1Idx, field: 'p1Games', value: match.p1Games, color: PAIR_COLORS[match.p1Idx] },
+    { pairIdx: match.p2Idx, field: 'p2Games', value: match.p2Games, color: PAIR_COLORS[match.p2Idx] },
+  ];
 
   return (
     <div className={`bg-slate-950 border rounded-xl p-3 ${r.invalid ? 'border-rose-500/50' : 'border-slate-800'}`}>
@@ -225,58 +250,102 @@ function MatchRow({ index, match, label1, label2, color1, color2, tieBreakPoints
         <span className="text-[10px] font-bold text-slate-600 w-5 shrink-0 tabular-nums">{index + 1}</span>
 
         <div className="flex-1 min-w-0 space-y-1.5">
-          <div className="flex items-center gap-2">
-            <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${color1?.dot || 'bg-slate-500'}`} />
-            <span className={`text-xs truncate flex-1 ${sideClass(0)}`}>{label1}</span>
-            <input
-              type="number"
-              inputMode="numeric"
-              min="0"
-              value={match.p1Games}
-              onChange={(e) => onGamesChange('p1Games', e.target.value)}
-              aria-label={`Games de ${label1}`}
-              className="w-11 shrink-0 bg-slate-900 border border-slate-700 rounded-md py-1 text-center text-sm font-bold text-white focus:outline-none focus:border-slate-400"
-            />
-          </div>
-
-          <div className="flex items-center gap-2">
-            <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${color2?.dot || 'bg-slate-500'}`} />
-            <span className={`text-xs truncate flex-1 ${sideClass(1)}`}>{label2}</span>
-            <input
-              type="number"
-              inputMode="numeric"
-              min="0"
-              value={match.p2Games}
-              onChange={(e) => onGamesChange('p2Games', e.target.value)}
-              aria-label={`Games de ${label2}`}
-              className="w-11 shrink-0 bg-slate-900 border border-slate-700 rounded-md py-1 text-center text-sm font-bold text-white focus:outline-none focus:border-slate-400"
-            />
-          </div>
+          {sides.map((side, i) => (
+            <div key={side.field} className="flex items-center gap-2">
+              <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${side.color?.dot || 'bg-slate-500'}`} />
+              <span className={`text-xs truncate flex-1 ${sideClass(i)}`}>{label(side.pairIdx)}</span>
+              <input
+                type="number"
+                inputMode="numeric"
+                min="0"
+                value={side.value}
+                onChange={(e) => onGamesChange(side.field, e.target.value)}
+                aria-label={`Games de ${label(side.pairIdx)}`}
+                className="w-11 shrink-0 bg-slate-900 border border-slate-700 rounded-md py-1 text-center text-sm font-bold text-white focus:outline-none focus:border-slate-400"
+              />
+            </div>
+          ))}
         </div>
       </div>
 
-      {(r.played || r.invalid) && (
-        <div className="mt-2 pl-8 flex items-center gap-2">
-          {r.invalid && (
-            <span className="text-[10px] text-rose-400 font-semibold flex items-center gap-1">
-              <AlertTriangle className="w-3 h-3" /> Marcador inválido (no puede haber empate)
-            </span>
-          )}
-          {r.played && (
-            <button
-              type="button"
-              onClick={onToggleTieBreak}
-              title="Marcar o desmarcar que este partido se definió en tie-break"
-              className={`text-[10px] font-bold px-2 py-0.5 rounded-full border transition-colors ${
-                r.isTieBreak
-                  ? 'bg-amber-500/15 text-amber-400 border-amber-500/40'
-                  : 'bg-slate-900 text-slate-500 border-slate-700 hover:text-slate-300'
-              }`}
-            >
-              <Zap className="w-3 h-3 inline mr-1" />
-              {r.isTieBreak ? `Tie-break · +${tieBreakPoints} al perdedor` : 'Marcar tie-break'}
-            </button>
-          )}
+      <div className="mt-2 pl-8 flex items-center gap-2 flex-wrap">
+        {r.invalid && (
+          <span className="text-[10px] text-rose-400 font-semibold flex items-center gap-1">
+            <AlertTriangle className="w-3 h-3" /> Marcador inválido (no puede haber empate)
+          </span>
+        )}
+        {r.played && (
+          <button
+            type="button"
+            onClick={onToggleTieBreak}
+            title="Marcar o desmarcar que este partido se definió en tie-break"
+            className={`text-[10px] font-bold px-2 py-0.5 rounded-full border transition-colors ${
+              r.isTieBreak
+                ? 'bg-amber-500/15 text-amber-400 border-amber-500/40'
+                : 'bg-slate-900 text-slate-500 border-slate-700 hover:text-slate-300'
+            }`}
+          >
+            <Zap className="w-3 h-3 inline mr-1" />
+            {r.isTieBreak ? `Tie-break · +${scoring.derrotaTieBreak} al perdedor` : 'Marcar tie-break'}
+          </button>
+        )}
+
+        <button
+          type="button"
+          onClick={() => setEditing((v) => !v)}
+          className={`text-[10px] font-bold px-2 py-0.5 rounded-full border transition-colors flex items-center gap-1 ${
+            hasLineup
+              ? 'bg-sky-500/15 text-sky-400 border-sky-500/40'
+              : 'bg-slate-900 text-slate-500 border-slate-700 hover:text-slate-300'
+          }`}
+        >
+          <Users className="w-3 h-3" />
+          {hasLineup ? 'Jugadores cambiados' : '¿Faltó alguien en este partido?'}
+        </button>
+
+        {hasLineup && (
+          <button
+            type="button"
+            onClick={onResetLineup}
+            title="Volver a los jugadores por defecto de la fecha"
+            className="text-[10px] font-semibold text-slate-500 hover:text-white underline"
+          >
+            deshacer
+          </button>
+        )}
+      </div>
+
+      {editing && (
+        <div className="mt-3 pl-8 grid grid-cols-1 sm:grid-cols-2 gap-3 pk-fade">
+          {sides.map((side) => {
+            const slots = slotsForMatch(draft, side.pairIdx, match);
+            return (
+              <div
+                key={side.pairIdx}
+                className={`p-2.5 rounded-lg border ${side.color?.ring || 'border-slate-700'} ${side.color?.soft || ''} space-y-2`}
+              >
+                <span className="text-[10px] uppercase font-black text-slate-400">Pareja {side.pairIdx + 1}</span>
+                <SlotPicker
+                  label="Drive"
+                  roleColor="text-blue-300"
+                  slot={slots[0]}
+                  players={players}
+                  otherGroup={otherGroup}
+                  scoring={scoring}
+                  onChange={(next) => onLineupChange(side.pairIdx, 'drive', next)}
+                />
+                <SlotPicker
+                  label="Revés"
+                  roleColor="text-purple-300"
+                  slot={slots[1]}
+                  players={players}
+                  otherGroup={otherGroup}
+                  scoring={scoring}
+                  onChange={(next) => onLineupChange(side.pairIdx, 'reves', next)}
+                />
+              </div>
+            );
+          })}
         </div>
       )}
     </div>

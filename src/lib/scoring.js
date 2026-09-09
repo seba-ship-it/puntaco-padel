@@ -144,9 +144,19 @@ function eachResolvedMatch(result, callback) {
   });
 }
 
-function pairSlots(result, pairIdx) {
-  const pair = result.pairs?.[pairIdx];
-  return pair ? [pair.drive, pair.reves] : [];
+/**
+ * Quién ocupó realmente los dos puestos de una pareja EN ESTE PARTIDO.
+ *
+ * `result.pairs` es la formación por defecto de la fecha. Cada partido puede
+ * pisarla en `match.lineup[pairIdx]`, porque un apoyo suele entrar para un
+ * partido suelto y no para toda la jornada.
+ */
+export function slotsForMatch(result, pairIdx, match) {
+  const base = result.pairs?.[pairIdx];
+  if (!base) return [];
+  const override = match?.lineup?.[pairIdx];
+  if (!override) return [base.drive, base.reves];
+  return [override.drive || base.drive, override.reves || base.reves];
 }
 
 export function computeStandings(league, groupId) {
@@ -166,12 +176,12 @@ export function computeStandings(league, groupId) {
       const played = Array(PAIRS_PER_FECHA).fill(0);
       const touched = new Set();
 
-      eachResolvedMatch(result, ({ resolved, winnerPairIdx, loserPairIdx, winnerGames, loserGames }) => {
+      eachResolvedMatch(result, ({ match, resolved, winnerPairIdx, loserPairIdx, winnerGames, loserGames }) => {
         played[winnerPairIdx] += 1;
         played[loserPairIdx] += 1;
         wins[winnerPairIdx] += 1;
 
-        pairSlots(result, winnerPairIdx).forEach((slot) => {
+        slotsForMatch(result, winnerPairIdx, match).forEach((slot) => {
           const kind = slotKind(slot);
           const row = rows.get(slot?.playerId);
           if (!row || kind === 'invitado') return;
@@ -194,7 +204,7 @@ export function computeStandings(league, groupId) {
           touched.add(slot.playerId);
         });
 
-        pairSlots(result, loserPairIdx).forEach((slot) => {
+        slotsForMatch(result, loserPairIdx, match).forEach((slot) => {
           const kind = slotKind(slot);
           const row = rows.get(slot?.playerId);
           if (!row || kind === 'invitado') return;
@@ -220,12 +230,25 @@ export function computeStandings(league, groupId) {
         });
       });
 
-      // Fecha perfecta: la pareja ganó sus 4 partidos. Solo para titulares.
+      // Fecha perfecta: la pareja ganó sus 4 partidos.
+      // Solo lo cobra quien jugó de titular en LOS CUATRO: si el puesto lo
+      // ocuparon distintas personas, nadie hizo la fecha completa.
       for (let i = 0; i < PAIRS_PER_FECHA; i++) {
         if (played[i] < PAIRS_PER_FECHA - 1 || wins[i] !== PAIRS_PER_FECHA - 1) continue;
-        pairSlots(result, i).forEach((slot) => {
-          if (slotKind(slot) !== 'titular') return;
-          const row = rows.get(slot.playerId);
+
+        const matchesOfPair = (result.matches || []).filter(
+          (m) => (m.p1Idx === i || m.p2Idx === i) && resolveMatch(m).played,
+        );
+
+        [0, 1].forEach((slotPos) => {
+          const occupants = matchesOfPair.map((m) => slotsForMatch(result, i, m)[slotPos]);
+          const first = occupants[0];
+          const siempreElMismoTitular =
+            occupants.length === PAIRS_PER_FECHA - 1 &&
+            occupants.every((s) => slotKind(s) === 'titular' && s?.playerId === first?.playerId);
+          if (!siempreElMismoTitular) return;
+
+          const row = rows.get(first.playerId);
           if (!row) return;
           row.fechasPerfectas += 1;
           row.bonus += scoring.fechaPerfecta;
@@ -286,17 +309,17 @@ export function buildPlayerProfile(league, groupId, playerId) {
   [...league.results]
     .sort((a, b) => a.fechaNum - b.fechaNum)
     .forEach((result) => {
-      eachResolvedMatch(result, ({ resolved, winnerPairIdx, loserPairIdx, winnerGames, loserGames }) => {
+      eachResolvedMatch(result, ({ match, resolved, winnerPairIdx, loserPairIdx, winnerGames, loserGames }) => {
         [winnerPairIdx, loserPairIdx].forEach((pairIdx, side) => {
           const isWin = side === 0;
-          const slots = pairSlots(result, pairIdx);
+          const slots = slotsForMatch(result, pairIdx, match);
           const myIdx = slots.findIndex((s) => s?.playerId === playerId);
           if (myIdx === -1) return;
 
           const me = slots[myIdx];
           const kind = slotKind(me);
           const partner = slots[myIdx === 0 ? 1 : 0];
-          const rivalSlots = pairSlots(result, isWin ? loserPairIdx : winnerPairIdx);
+          const rivalSlots = slotsForMatch(result, isWin ? loserPairIdx : winnerPairIdx, match);
 
           let points;
           if (kind === 'apoyo') points = isWin ? scoring.apoyoVictoria : scoring.apoyoDerrota;
