@@ -1,0 +1,21 @@
+rules_version = '2';
+
+// La liga (tabla, fechas, perfiles) la puede leer cualquiera con el link.
+// Escribirla, y ver o tocar los pagos, solo la cuenta compartida de quien carga.
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function esEncargado() {
+      return request.auth != null
+        && request.auth.token.email == 'seba@agenciazeta.com';
+    }
+
+    match /league/{doc} {
+      allow read: if true;
+      allow write: if esEncargado();
+    }
+
+    match /finance/{doc} {
+      allow read, write: if esEncargado();
+    }
+  }
+}

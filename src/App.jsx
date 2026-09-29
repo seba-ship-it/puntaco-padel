@@ -26,7 +26,7 @@ import {
   emptyFinance,
 } from './lib/storage.js';
 import { closeSeason, applyRepechaje, seasonProgress } from './lib/season.js';
-import { SUPABASE_CONFIGURED } from './lib/supabaseClient.js';
+import { CLOUD_CONFIGURED } from './lib/firebaseClient.js';
 import { useAuth } from './lib/auth.js';
 import { downloadStandingsImage } from './lib/exportImage.js';
 import { Toast, themeFor } from './components/ui.jsx';
@@ -66,7 +66,7 @@ export default function App() {
   const [selectedPlayerId, setSelectedPlayerId] = useState(null);
   const [notification, setNotification] = useState(null);
 
-  const { canEdit, recovering, signIn, signOut, sendPasswordReset, updatePassword } = useAuth();
+  const { canEdit, signIn, signOut, sendPasswordReset } = useAuth();
   const [finance, setFinance] = useState(null); // solo se carga con la clave
 
   const showToast = useCallback((msg, type = 'success') => setNotification({ msg, type }), []);
@@ -100,7 +100,7 @@ export default function App() {
 
   /* ------------------------------------------------- carga y guardado */
 
-  // Carga inicial desde la base de datos (o localStorage si no hay Supabase configurado).
+  // Carga inicial desde la base de datos (o localStorage si no hay Firebase configurado).
   useEffect(() => {
     let cancelled = false;
     loadLeague()
@@ -128,7 +128,7 @@ export default function App() {
   // Cambios en vivo: si otra persona guarda desde otro dispositivo, esta pantalla se actualiza sola.
   useEffect(() => {
     return subscribeToLeague((next) => {
-      // Supabase también nos devuelve nuestros propios cambios. Si lo que llega
+      // Firestore también nos devuelve nuestros propios cambios. Si lo que llega
       // es exactamente lo último que guardamos, es el eco: no hay nada que hacer.
       if (JSON.stringify(next) === lastSaved.current) return;
 
@@ -599,11 +599,9 @@ export default function App() {
             </div>
             <AuthGate
               canEdit={canEdit}
-              recovering={recovering}
               onSignIn={signIn}
               onSignOut={signOut}
               onSendReset={sendPasswordReset}
-              onUpdatePassword={updatePassword}
             />
           </div>
         </div>
@@ -757,7 +755,7 @@ export default function App() {
         <div className="max-w-5xl mx-auto px-4 flex items-center justify-center gap-2 text-[11px] text-slate-600">
           <Trophy className="w-3.5 h-3.5" />
           Puntako Pádel ·{' '}
-          {SUPABASE_CONFIGURED
+          {CLOUD_CONFIGURED
             ? 'los datos se guardan en la nube, compartidos con todos'
             : 'modo local: los datos se guardan solo en este navegador'}
         </div>

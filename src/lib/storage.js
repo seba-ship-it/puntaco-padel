@@ -1,40 +1,47 @@
 /**
  * Persistencia de la liga.
  *
- * Fuente de verdad: una fila en Supabase (tabla `league_state`), compartida
- * por todos los que abren el link. Ver supabase/schema.sql.
+ * Fuente de verdad: un documento en Firestore (`league/main`), compartido por
+ * todos los que abren el link. La liga entera se guarda como un texto JSON en
+ * el campo `json`: así se conserva tal cual, sin las restricciones de Firestore
+ * con arrays anidados. Ver firestore.rules (lectura pública, escritura solo
+ * con la clave).
  *
- * Si la app corre sin las variables de Supabase configuradas (típicamente en
- * desarrollo local antes de conectar el proyecto), cae a localStorage como
- * modo offline — así se puede seguir trabajando en el código sin depender de
- * una base de datos real. La build que se publica siempre tiene Supabase
- * configurado vía GitHub Actions, así que en producción esto no aplica.
+ * Si la app corre sin las variables de Firebase configuradas (típicamente en
+ * desarrollo local), cae a localStorage como modo offline. La build que se
+ * publica siempre tiene Firebase configurado vía GitHub Actions.
  */
 
+import { doc, getDoc, onSnapshot, serverTimestamp, setDoc } from 'firebase/firestore';
 import {
   buildDefaultLeague, buildCalendar, slug,
   DEFAULT_FEES, FIRST_SEASON_DATES, SCORING_RULES_VERSION,
 } from '../data/defaults.js';
-import { supabase, SUPABASE_CONFIGURED } from './supabaseClient.js';
+import { db, CLOUD_CONFIGURED } from './firebaseClient.js';
 
-const ROW_ID = 'puntaco';
+const LEAGUE_DOC = ['league', 'main'];
+const FINANCE_DOC = ['finance', 'main'];
 const LOCAL_KEY = 'puntaco-padel-v3';
 const LEGACY_KEY = 'puntaco-padel-v2';
+
+const parseDoc = (snap) => {
+  const raw = snap.exists() ? snap.data()?.json : null;
+  return raw ? JSON.parse(raw) : null;
+};
 
 /* ---------------------------------------------------------------- lectura */
 
 export async function loadLeague() {
-  if (SUPABASE_CONFIGURED) {
-    const { data, error } = await supabase
-      .from('league_state')
-      .select('data')
-      .eq('id', ROW_ID)
-      .maybeSingle();
+  if (CLOUD_CONFIGURED) {
+    let data;
+    try {
+      data = parseDoc(await getDoc(doc(db, ...LEAGUE_DOC)));
+    } catch (error) {
+      throw new Error(`No se pudo leer la liga desde la base de datos: ${error.message}`);
+    }
+    if (data) return normalize(data);
 
-    if (error) throw new Error(`No se pudo leer la liga desde la base de datos: ${error.message}`);
-    if (data?.data) return normalize(data.data);
-
-    // Fila todavía no creada (proyecto recién conectado): arrancamos de cero.
+    // Documento todavía no creado (proyecto recién conectado): arrancamos de cero.
     return buildDefaultLeague();
   }
 
@@ -65,11 +72,16 @@ function readKey(key) {
 /* --------------------------------------------------------------- guardado */
 
 export async function saveLeague(league) {
-  if (SUPABASE_CONFIGURED) {
-    const { error } = await supabase
-      .from('league_state')
-      .upsert({ id: ROW_ID, data: league }, { onConflict: 'id' });
-    if (error) throw new Error(`No se pudo guardar en la base de datos: ${error.message}`);
+  if (CLOUD_CONFIGURED) {
+    try {
+      await setDoc(doc(db, ...LEAGUE_DOC), { json: JSON.stringify(league), updatedAt: serverTimestamp() });
+    } catch (error) {
+      throw new Error(
+        error.code === 'permission-denied'
+          ? 'No se pudo guardar: hace falta ingresar con la clave.'
+          : `No se pudo guardar en la base de datos: ${error.message}`,
+      );
+    }
     return;
   }
 
@@ -83,25 +95,29 @@ export async function saveLeague(league) {
 /**
  * Se suscribe a cambios en vivo de la liga (cuando otra persona guarda algo
  * desde otro dispositivo). Devuelve una función para cancelar la suscripción.
- * No hace nada si Supabase no está configurado.
+ * No hace nada si Firebase no está configurado.
  */
 export function subscribeToLeague(onChange) {
-  if (!SUPABASE_CONFIGURED) return () => {};
+  if (!CLOUD_CONFIGURED) return () => {};
 
-  const channel = supabase
-    .channel('league_state_changes')
-    .on(
-      'postgres_changes',
-      { event: 'UPDATE', schema: 'public', table: 'league_state', filter: `id=eq.${ROW_ID}` },
-      (payload) => {
-        if (payload.new?.data) onChange(normalize(payload.new.data));
-      },
-    )
-    .subscribe();
-
-  return () => {
-    supabase.removeChannel(channel);
-  };
+  let first = true;
+  return onSnapshot(
+    doc(db, ...LEAGUE_DOC),
+    (snap) => {
+      // La primera lectura es el estado inicial, que la carga ya trajo; y los
+      // cambios propios pendientes de confirmar no son de otro dispositivo.
+      if (first) {
+        first = false;
+        return;
+      }
+      if (snap.metadata.hasPendingWrites) return;
+      const data = parseDoc(snap);
+      if (data) onChange(normalize(data));
+    },
+    () => {
+      /* sin permiso o sin conexión: la carga inicial ya muestra el aviso */
+    },
+  );
 }
 
 /* ------------------------------------------------------------- migración */
@@ -192,26 +208,27 @@ function normalizeFinance(data) {
 }
 
 export async function loadFinance() {
-  if (SUPABASE_CONFIGURED) {
-    const { data, error } = await supabase
-      .from('league_finance')
-      .select('data')
-      .eq('id', ROW_ID)
-      .maybeSingle();
-    if (error) throw new Error(`No se pudo leer los pagos: ${error.message}`);
-    return normalizeFinance(data?.data);
+  if (CLOUD_CONFIGURED) {
+    try {
+      return normalizeFinance(parseDoc(await getDoc(doc(db, ...FINANCE_DOC))));
+    } catch (error) {
+      throw new Error(`No se pudo leer los pagos: ${error.message}`);
+    }
   }
   return normalizeFinance(readKey(FINANCE_KEY));
 }
 
 export async function saveFinance(finance) {
-  if (SUPABASE_CONFIGURED) {
-    const { data, error } = await supabase
-      .from('league_finance')
-      .upsert({ id: ROW_ID, data: finance }, { onConflict: 'id' })
-      .select('id');
-    if (error) throw new Error(`No se pudo guardar los pagos: ${error.message}`);
-    if (!data?.length) throw new Error('No se pudo guardar los pagos: hace falta ingresar con la clave.');
+  if (CLOUD_CONFIGURED) {
+    try {
+      await setDoc(doc(db, ...FINANCE_DOC), { json: JSON.stringify(finance), updatedAt: serverTimestamp() });
+    } catch (error) {
+      throw new Error(
+        error.code === 'permission-denied'
+          ? 'No se pudo guardar los pagos: hace falta ingresar con la clave.'
+          : `No se pudo guardar los pagos: ${error.message}`,
+      );
+    }
     return;
   }
   try {
@@ -251,7 +268,7 @@ export function triggerDownload(blob, filename) {
 
 export async function resetLeague() {
   const fresh = buildDefaultLeague();
-  if (!SUPABASE_CONFIGURED) {
+  if (!CLOUD_CONFIGURED) {
     try {
       window.localStorage.removeItem(LOCAL_KEY);
       window.localStorage.removeItem(LEGACY_KEY);
