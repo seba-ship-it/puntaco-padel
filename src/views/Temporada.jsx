@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { ArrowUp, ArrowDown, Shield, Trophy, History, Lock } from 'lucide-react';
 import { EmptyState, ProgressBar, SectionTitle, themeFor } from '../components/ui.jsx';
+import { formatDate } from '../data/defaults.js';
 import { planMovements, seasonProgress } from '../lib/season.js';
 
 const ROLE_STYLE = { Drive: 'text-blue-300', Revés: 'text-purple-300' };
@@ -171,7 +172,7 @@ function SeasonCard({ season, repechaje }) {
         <div>
           <h4 className="text-base font-black text-white">Temporada {season.number}</h4>
           <p className="text-[11px] text-slate-500">
-            {season.dates?.[0]} – {season.dates?.[season.dates.length - 1]}
+            {formatDate(season.dates?.[0])} – {formatDate(season.dates?.[season.dates.length - 1])}
           </p>
         </div>
         <Trophy className="w-5 h-5 text-amber-400 shrink-0" />

@@ -26,11 +26,11 @@ export default function Reglamento({ scoring, fees }) {
       rows: [
         ['Entrar a jugar y perder', sign(scoring.apoyoDerrota)],
         ['Ganar un partido', sign(scoring.apoyoVictoria)],
-        ['Ganar 6-0', sign(scoring.apoyoVictoria60)],
-        ['Perder 7-6', sign(scoring.apoyoDerrotaTieBreak)],
-        ['Perder 0-6', sign(scoring.apoyoDerrota06)],
+        ['Ganar 6-0 (extra)', sign(scoring.apoyoVictoria60)],
+        ['Perder 7-6 (extra)', sign(scoring.apoyoDerrotaTieBreak)],
+        ['Perder 0-6 (extra)', sign(scoring.apoyoDerrota06)],
       ],
-      note: 'Medida de último recurso: primero se buscan invitados externos. El drive reemplaza solo a drive y el revés solo a revés, del mismo grupo, y máximo 1 partido de apoyo por jugador por lunes.',
+      note: 'Los extras se suman al puntaje base del apoyo. Medida de último recurso: primero se buscan invitados externos. El drive reemplaza solo a drive y el revés solo a revés, del mismo grupo, y máximo 1 partido de apoyo por jugador por lunes.',
     },
     {
       title: 'Ascensos y descensos (al terminar la Fecha 5)',

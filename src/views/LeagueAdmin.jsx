@@ -1,6 +1,6 @@
 import React, { useRef, useState } from 'react';
 import { Plus, Trash2, Download, Upload, RotateCcw, GripVertical, AlertTriangle, Lock } from 'lucide-react';
-import { ROLES } from '../data/defaults.js';
+import { ROLES, formatDate, isMonday } from '../data/defaults.js';
 import { PAIR_COLORS, SectionTitle, themeFor } from '../components/ui.jsx';
 import { PAIRS_PER_FECHA } from '../lib/scoring.js';
 
@@ -16,8 +16,7 @@ export default function LeagueAdmin({
   onUpdatePlayer,
   onDeletePlayer,
   onUpdateFecha,
-  onAddFecha,
-  onDeleteFecha,
+  onSetSeasonDate,
   onUpdateScoring,
   onExport,
   onImport,
@@ -78,8 +77,7 @@ export default function LeagueAdmin({
           group={group}
           league={league}
           onUpdateFecha={onUpdateFecha}
-          onAddFecha={onAddFecha}
-          onDeleteFecha={onDeleteFecha}
+          onSetSeasonDate={onSetSeasonDate}
           accent={theme.bg}
         />
       )}
@@ -213,43 +211,44 @@ function PlayersTab({ group, league, onAddPlayer, onUpdatePlayer, onDeletePlayer
 
 /* ---------------------------------------------------------- Calendario */
 
-function CalendarTab({ group, league, onUpdateFecha, onAddFecha, onDeleteFecha, accent }) {
+function CalendarTab({ group, league, onUpdateFecha, onSetSeasonDate, accent }) {
   const drives = group.players.filter((p) => p.role === 'Drive');
   const reveses = group.players.filter((p) => p.role === 'Revés');
 
-  const hasResults = (num) =>
-    league.results.some((r) => r.groupId === group.id && r.fechaNum === num && (r.matches || []).length > 0);
-
   return (
     <div className="space-y-3">
-      <div className="flex justify-end">
-        <button
-          onClick={() => onAddFecha(group.id)}
-          className={`px-4 py-2 rounded-lg text-xs font-bold text-slate-950 flex items-center gap-1.5 ${accent} hover:opacity-90 transition-opacity`}
-        >
-          <Plus className="w-4 h-4" />
-          Agregar fecha
-        </button>
+      <div className="bg-slate-900 border border-slate-800 rounded-xl p-4 space-y-3">
+        <div>
+          <h3 className="text-sm font-bold text-white">Temporada {league.seasonNumber}: fechas de juego</h3>
+          <p className="text-xs text-slate-500 mt-0.5">
+            Cinco fechas, una por lunes, iguales para los dos grupos. Al cerrar la temporada se arma sola la siguiente
+            (con los ascensos y descensos y los lunes siguientes); acá podés corregir cualquier día.
+          </p>
+        </div>
+        <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
+          {group.fechas.map((fecha) => (
+            <label key={fecha.num} className="text-[10px] uppercase font-bold text-slate-500">
+              Fecha {fecha.num}
+              <input
+                type="date"
+                value={/^\d{4}-\d{2}-\d{2}$/.test(fecha.date) ? fecha.date : ''}
+                onChange={(e) => onSetSeasonDate(fecha.num, e.target.value)}
+                className="mt-1 w-full bg-slate-950 border border-slate-700 rounded-lg px-2 py-1.5 text-xs text-white focus:outline-none focus:border-slate-500"
+              />
+              <span className={`block mt-1 normal-case font-semibold ${fecha.date && !isMonday(fecha.date) ? 'text-amber-400' : 'text-slate-500'}`}>
+                {fecha.date ? formatDate(fecha.date) : 'sin fecha'}
+                {fecha.date && !isMonday(fecha.date) ? ' · no es lunes' : ''}
+              </span>
+            </label>
+          ))}
+        </div>
       </div>
 
       {group.fechas.map((fecha) => (
         <div key={fecha.num} className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden">
           <div className="px-4 py-3 border-b border-slate-800 flex items-center gap-3">
             <span className="font-black text-sm text-white shrink-0">Fecha {fecha.num}</span>
-            <input
-              value={fecha.date}
-              onChange={(e) => onUpdateFecha(group.id, fecha.num, { date: e.target.value })}
-              placeholder="Ej: 28-sept"
-              className="flex-1 min-w-0 max-w-[160px] bg-slate-950 border border-slate-700 rounded-lg px-2 py-1 text-xs text-white focus:outline-none focus:border-slate-500"
-            />
-            <div className="flex-1" />
-            <button
-              onClick={() => onDeleteFecha(group.id, fecha.num, hasResults(fecha.num))}
-              title="Borrar esta fecha del calendario"
-              className="p-1.5 rounded-lg text-slate-600 hover:text-rose-400 hover:bg-rose-500/10 transition-colors"
-            >
-              <Trash2 className="w-4 h-4" />
-            </button>
+            <span className="text-xs text-slate-500">{formatDate(fecha.date)}</span>
           </div>
 
           <div className="p-3 space-y-2">
@@ -319,9 +318,9 @@ const SCORING_LABELS = {
   penalizacion06: 'Se resta por perder 0-6',
   apoyoVictoria: 'Apoyo que gana su partido',
   apoyoDerrota: 'Apoyo que pierde (entrar a jugar)',
-  apoyoVictoria60: 'Apoyo que gana 6-0 (total)',
-  apoyoDerrotaTieBreak: 'Apoyo que pierde 7-6 (total)',
-  apoyoDerrota06: 'Apoyo que pierde 0-6 (total)',
+  apoyoVictoria60: 'Apoyo: extra por ganar 6-0',
+  apoyoDerrotaTieBreak: 'Apoyo: extra por perder 7-6',
+  apoyoDerrota06: 'Apoyo: extra por perder 0-6',
 };
 
 function ScoringTab({ scoring, onUpdateScoring }) {

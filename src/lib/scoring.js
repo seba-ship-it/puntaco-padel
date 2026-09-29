@@ -7,6 +7,8 @@
  * contradigan entre sí.
  */
 
+import { formatDate } from '../data/defaults.js';
+
 export const PAIRS_PER_FECHA = 5;
 export const MATCHES_PER_FECHA = (PAIRS_PER_FECHA * (PAIRS_PER_FECHA - 1)) / 2; // 10
 
@@ -177,12 +179,13 @@ export function matchPoints(scoring, { kind, isWin, resolved, winnerGames, loser
   const extras = !guestPartner;
 
   if (kind === 'apoyo') {
+    // Los extras se suman al puntaje base del apoyo.
     if (isWin) {
-      return { points: extras && shutout ? scoring.apoyoVictoria60 : scoring.apoyoVictoria, part: 'apoyo' };
+      return { points: scoring.apoyoVictoria + (extras && shutout ? scoring.apoyoVictoria60 : 0), part: 'apoyo' };
     }
     let points = scoring.apoyoDerrota;
-    if (extras && shutout) points = scoring.apoyoDerrota06;
-    else if (extras && resolved.isTieBreak) points = scoring.apoyoDerrotaTieBreak;
+    if (extras && shutout) points += scoring.apoyoDerrota06;
+    else if (extras && resolved.isTieBreak) points += scoring.apoyoDerrotaTieBreak;
     return { points, part: 'apoyo' };
   }
 
@@ -329,7 +332,7 @@ export function buildPlayerProfile(league, groupId, playerId) {
     return allPlayers.find((p) => p.id === slot.playerId)?.name || slot.playerId;
   };
   const fechaDateOf = (result) =>
-    league.groups.find((g) => g.id === result.groupId)?.fechas.find((f) => f.num === result.fechaNum)?.date || '';
+    formatDate(league.groups.find((g) => g.id === result.groupId)?.fechas.find((f) => f.num === result.fechaNum)?.date || '');
 
   const matches = [];
   const partnerTally = new Map();

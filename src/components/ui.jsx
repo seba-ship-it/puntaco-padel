@@ -75,8 +75,8 @@ export function RulesPanel({ scoring, open, onToggle }) {
             { label: 'Perder 7-6', value: `+${scoring.derrotaTieBreak} pts`, tone: 'text-amber-400' },
             { label: 'Perder 7-5', value: `+${scoring.derrota75} pts`, tone: 'text-amber-400' },
             { label: 'Fecha perfecta (4 de 4)', value: `+${scoring.fechaPerfecta} pts`, tone: 'text-violet-400' },
-            { label: 'Apoyo que gana', value: `${scoring.apoyoVictoria} pts (6-0: ${scoring.apoyoVictoria60})`, tone: 'text-sky-400' },
-            { label: 'Apoyo que pierde', value: `${scoring.apoyoDerrota} pts (7-6: ${scoring.apoyoDerrotaTieBreak} · 0-6: ${scoring.apoyoDerrota06})`, tone: 'text-sky-400' },
+            { label: 'Apoyo que gana', value: `${scoring.apoyoVictoria} pts (+${scoring.apoyoVictoria60} si es 6-0)`, tone: 'text-sky-400' },
+            { label: 'Apoyo que pierde', value: `${scoring.apoyoDerrota} pts (+${scoring.apoyoDerrotaTieBreak} si es 7-6 · ${scoring.apoyoDerrota06} si es 0-6)`, tone: 'text-sky-400' },
             { label: 'Ganar un partido 6-0', value: `+${scoring.bonus60} pts extra`, tone: 'text-emerald-400' },
             { label: 'Perder un partido 0-6', value: `-${scoring.penalizacion06} pts`, tone: 'text-rose-400' },
           ].map((r) => (

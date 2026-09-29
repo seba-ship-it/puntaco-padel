@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
-import { Check, Trash2, Plus, Lock } from 'lucide-react';
+import { Check, Trash2, Lock } from 'lucide-react';
 import { ProgressBar, RulesPanel, SectionTitle, PAIR_COLORS, themeFor } from '../components/ui.jsx';
+import { formatDate } from '../data/defaults.js';
 import { MATCHES_PER_FECHA, countPlayed } from '../lib/scoring.js';
 
 /**
@@ -15,7 +16,6 @@ export default function Fechas({
   canEdit = true,
   onOpenFecha,
   onDeleteFecha,
-  onAddFecha,
 }) {
   const [rulesOpen, setRulesOpen] = useState(false);
   const theme = themeFor(group.id);
@@ -32,17 +32,6 @@ export default function Fechas({
             ? 'Tocá una fecha para cargar o corregir sus resultados'
             : 'Estás viendo los resultados. Para cargar hace falta la clave.'
         }
-        right={
-          canEdit && (
-            <button
-              onClick={onAddFecha}
-              className="px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 bg-slate-800 text-slate-200 hover:bg-slate-700 transition-colors"
-            >
-              <Plus className="w-3.5 h-3.5" />
-              Agregar fecha
-            </button>
-          )
-        }
       />
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
@@ -56,7 +45,7 @@ export default function Fechas({
               <div className="px-4 py-3 flex items-center justify-between border-b border-slate-800">
                 <div className="flex items-baseline gap-2">
                   <span className="font-black text-sm text-white">Fecha {fecha.num}</span>
-                  <span className="text-xs text-slate-500">{fecha.date}</span>
+                  <span className="text-xs text-slate-500">{formatDate(fecha.date)}</span>
                 </div>
                 <div className="flex items-center gap-2">
                   {hasDraft && (

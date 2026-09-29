@@ -20,7 +20,7 @@ export function slug(text) {
 export const ROLES = ['Drive', 'Revés'];
 
 /** Reglamento de puntuación. Editable desde la pantalla "Liga". */
-export const SCORING_RULES_VERSION = 2; // Reglamento Puntako Pádel 2026
+export const SCORING_RULES_VERSION = 3; // Reglamento Puntako Pádel 2026
 
 export const DEFAULT_SCORING = {
   victoria: 10,
@@ -30,12 +30,13 @@ export const DEFAULT_SCORING = {
   fechaPerfecta: 5,
   bonus60: 2, // extra por ganar un partido 6-0
   penalizacion06: 2, // se resta a quien pierde un partido 0-6
-  // Apoyo (jugador del mismo grupo que cubre un puesto). Son totales por partido.
-  apoyoVictoria: 3,
+  // Apoyo (jugador del mismo grupo que cubre un puesto).
+  apoyoVictoria: 3, // ganar un partido como apoyo
   apoyoDerrota: 2, // entrar a jugar y perder
-  apoyoVictoria60: 4, // ganar 6-0
-  apoyoDerrotaTieBreak: 3, // perder 7-6
-  apoyoDerrota06: -2, // perder 0-6
+  // Extras: se SUMAN al puntaje base del apoyo.
+  apoyoVictoria60: 4, // extra por ganar 6-0
+  apoyoDerrotaTieBreak: 3, // extra por perder 7-6
+  apoyoDerrota06: -2, // extra por perder 0-6
 };
 
 /** Cuotas y multas, en guaraníes. */
@@ -56,21 +57,33 @@ const PLAYERS_B = [
   ['Josué', 'Revés'], ['Jordan', 'Revés'], ['Fideo', 'Revés'], ['Alejo', 'Revés'], ['Juanki', 'Revés'],
 ];
 
-/** Lunes de la primera temporada (editables desde Liga → Calendario). */
-export const FIRST_SEASON_DATES = ['5-oct', '12-oct', '19-oct', '26-oct', '2-nov'];
+/**
+ * Lunes de la temporada en curso (editables desde Liga → Calendario).
+ * Las fechas se guardan como "AAAA-MM-DD".
+ */
+export const FIRST_SEASON_DATES = ['2026-10-05', '2026-10-12', '2026-10-19', '2026-10-26', '2026-11-02'];
 
 const MONTHS = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sept', 'oct', 'nov', 'dic'];
+const WEEKDAYS = ['dom', 'lun', 'mar', 'mié', 'jue', 'vie', 'sáb'];
 
-/** Las próximas `count` fechas semanales después de "2-nov" (o la que sea). */
-export function nextWeeklyDates(lastDate, count = 5, year = new Date().getFullYear()) {
-  const m = /^(\d{1,2})-([a-záéíóú]+)/i.exec(String(lastDate || '').trim());
-  const monthIdx = m ? MONTHS.findIndex((x) => m[2].toLowerCase().startsWith(x.slice(0, 3))) : -1;
-  if (!m || monthIdx < 0) return Array.from({ length: count }, (_, i) => `Fecha ${i + 1}`);
-  const base = new Date(Date.UTC(year, monthIdx, Number(m[1])));
-  return Array.from({ length: count }, (_, i) => {
-    const d = new Date(base.getTime() + (i + 1) * 7 * 86400000);
-    return `${d.getUTCDate()}-${MONTHS[d.getUTCMonth()]}`;
-  });
+const parseIso = (iso) => (/^\d{4}-\d{2}-\d{2}$/.test(iso || '') ? new Date(`${iso}T12:00:00Z`) : null);
+
+/** "2026-10-05" → "lun 5-oct". Si no es una fecha ISO (datos viejos), la devuelve tal cual. */
+export function formatDate(iso) {
+  const d = parseIso(iso);
+  if (!d) return iso || '';
+  return `${WEEKDAYS[d.getUTCDay()]} ${d.getUTCDate()}-${MONTHS[d.getUTCMonth()]}`;
+}
+
+export const isMonday = (iso) => parseIso(iso)?.getUTCDay() === 1;
+
+/** Las próximas `count` fechas semanales después de `lastDate` (ISO). */
+export function nextWeeklyDates(lastDate, count = 5) {
+  const base = parseIso(lastDate);
+  if (!base) return Array.from({ length: count }, () => '');
+  return Array.from({ length: count }, (_, i) =>
+    new Date(base.getTime() + (i + 1) * 7 * 86400000).toISOString().slice(0, 10),
+  );
 }
 
 /**
@@ -102,7 +115,7 @@ export function buildDefaultLeague() {
     scoringRules: SCORING_RULES_VERSION,
     scoring: { ...DEFAULT_SCORING },
     /** Temporada en curso (5 fechas). Al cerrarla pasa al historial. */
-    seasonNumber: 1,
+    seasonNumber: 2, // la temporada 1 (24-ago a 21-sept) ya se jugó: va al historial
     history: [],
     /** Partido de repechaje pendiente/jugado (fecha 1 de la temporada siguiente). */
     repechaje: null,

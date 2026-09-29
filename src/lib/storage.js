@@ -158,7 +158,7 @@ function normalize(league) {
     version: 4,
     scoringRules: SCORING_RULES_VERSION,
     scoring: rulesOutdated ? { ...base.scoring } : { ...base.scoring, ...(league.scoring || {}) },
-    seasonNumber: Number.isInteger(league.seasonNumber) && league.seasonNumber > 0 ? league.seasonNumber : 1,
+    seasonNumber: Number.isInteger(league.seasonNumber) && league.seasonNumber > 0 ? league.seasonNumber : base.seasonNumber,
     history: Array.isArray(league.history) ? league.history : [],
     repechaje: league.repechaje ?? null,
     groups: isOld

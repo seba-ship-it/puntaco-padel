@@ -431,43 +431,15 @@ export default function App() {
     }));
   };
 
-  const handleAddFecha = (gId) => {
-    const targetGroup = league.groups.find((g) => g.id === gId);
-    const drives = targetGroup.players.filter((p) => p.role === 'Drive');
-    const reveses = targetGroup.players.filter((p) => p.role === 'Revés');
-
-    if (drives.length < PAIRS_PER_FECHA || reveses.length < PAIRS_PER_FECHA) {
-      showToast(
-        `Faltan jugadores: hacen falta ${PAIRS_PER_FECHA} drives y ${PAIRS_PER_FECHA} revés (hay ${drives.length} y ${reveses.length}).`,
-        'error',
-      );
-      return;
-    }
-
-    const nextNum = targetGroup.fechas.reduce((max, f) => Math.max(max, f.num), 0) + 1;
-
-    // Rota los revés una posición por fecha, que es cómo está armado el fixture original.
-    const shift = (nextNum - 1) % PAIRS_PER_FECHA;
-    const pairs = Array.from({ length: PAIRS_PER_FECHA }, (_, i) => ({
-      driveId: drives[i].id,
-      revesId: reveses[(i + shift) % PAIRS_PER_FECHA].id,
-    }));
-
-    patchGroup(gId, (g) => ({ ...g, fechas: [...g.fechas, { num: nextNum, date: '', pairs }] }));
-    showToast(`Fecha ${nextNum} agregada. Ponele la fecha del calendario y ajustá las parejas.`);
-  };
-
-  const handleDeleteCalendarFecha = (gId, fechaNum, hasResults) => {
-    let msg = `¿Borrar la fecha ${fechaNum} del calendario?`;
-    if (hasResults) msg += `\n\nTiene resultados cargados y también se van a borrar.`;
-    if (!window.confirm(msg)) return;
-
-    patchGroup(gId, (g) => ({ ...g, fechas: g.fechas.filter((f) => f.num !== fechaNum) }));
+  /** La fecha de una jornada vale para todos los grupos: la temporada se juega el mismo día. */
+  const handleSetSeasonDate = (fechaNum, iso) => {
     setLeague((prev) => ({
       ...prev,
-      results: prev.results.filter((r) => !(r.groupId === gId && r.fechaNum === fechaNum)),
+      groups: prev.groups.map((g) => ({
+        ...g,
+        fechas: g.fechas.map((f) => (f.num === fechaNum ? { ...f, date: iso } : f)),
+      })),
     }));
-    showToast(`Fecha ${fechaNum} borrada del calendario.`);
   };
 
   /* ------------------------------------------------------- temporada */
@@ -704,7 +676,6 @@ export default function App() {
             canEdit={canEdit && !loadError}
             onOpenFecha={requireAuth(openFecha)}
             onDeleteFecha={requireAuth(handleDeleteResults)}
-            onAddFecha={requireAuth(() => handleAddFecha(group.id))}
           />
         )}
 
@@ -773,8 +744,7 @@ export default function App() {
             onUpdatePlayer={requireAuth(handleUpdatePlayer)}
             onDeletePlayer={requireAuth(handleDeletePlayer)}
             onUpdateFecha={requireAuth(handleUpdateFecha)}
-            onAddFecha={requireAuth(handleAddFecha)}
-            onDeleteFecha={requireAuth(handleDeleteCalendarFecha)}
+            onSetSeasonDate={requireAuth(handleSetSeasonDate)}
             onUpdateScoring={requireAuth(handleUpdateScoring)}
             onExport={handleExport}
             onImport={requireAuth(handleImport)}

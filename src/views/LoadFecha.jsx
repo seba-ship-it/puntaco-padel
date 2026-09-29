@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { X, Check, ChevronDown, AlertTriangle, Zap, Users } from 'lucide-react';
+import { formatDate } from '../data/defaults.js';
 import { ProgressBar, PAIR_COLORS, themeFor } from '../components/ui.jsx';
 import { MATCHES_PER_FECHA, resolveMatch, slotKind, countPlayed, slotsForMatch } from '../lib/scoring.js';
 
@@ -59,7 +60,7 @@ export default function LoadFecha({
               Fecha {fechaNum} · <span className={theme.text}>{group.name}</span>
             </h2>
             <p className="text-xs text-slate-500">
-              {fechaDate} · Cargá solo los games, el resto se calcula solo
+              {formatDate(fechaDate)} · Cargá solo los games, el resto se calcula solo
             </p>
           </div>
           <button
