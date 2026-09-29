@@ -72,10 +72,11 @@ export function RulesPanel({ scoring, open, onToggle }) {
         <div className="px-4 pb-4 pt-1 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2 text-xs pk-fade">
           {[
             { label: 'Ganar un partido', value: `+${scoring.victoria} pts`, tone: 'text-emerald-400' },
-            { label: 'Perder en tie-break', value: `+${scoring.derrotaTieBreak} pts`, tone: 'text-amber-400' },
+            { label: 'Perder 7-6', value: `+${scoring.derrotaTieBreak} pts`, tone: 'text-amber-400' },
+            { label: 'Perder 7-5', value: `+${scoring.derrota75} pts`, tone: 'text-amber-400' },
             { label: 'Fecha perfecta (4 de 4)', value: `+${scoring.fechaPerfecta} pts`, tone: 'text-violet-400' },
-            { label: 'Apoyo que gana', value: `${scoring.apoyoVictoria} pts fijos`, tone: 'text-sky-400' },
-            { label: 'Apoyo que pierde', value: `${scoring.apoyoDerrota} pts fijos`, tone: 'text-sky-400' },
+            { label: 'Apoyo que gana', value: `${scoring.apoyoVictoria} pts (6-0: ${scoring.apoyoVictoria60})`, tone: 'text-sky-400' },
+            { label: 'Apoyo que pierde', value: `${scoring.apoyoDerrota} pts (7-6: ${scoring.apoyoDerrotaTieBreak} · 0-6: ${scoring.apoyoDerrota06})`, tone: 'text-sky-400' },
             { label: 'Ganar un partido 6-0', value: `+${scoring.bonus60} pts extra`, tone: 'text-emerald-400' },
             { label: 'Perder un partido 0-6', value: `-${scoring.penalizacion06} pts`, tone: 'text-rose-400' },
           ].map((r) => (
@@ -85,10 +86,11 @@ export function RulesPanel({ scoring, open, onToggle }) {
             </div>
           ))}
           <p className="sm:col-span-2 lg:col-span-4 text-[11px] text-slate-500 leading-relaxed">
-            Si falta un titular, puede cubrirlo un <strong className="text-slate-300">apoyo</strong> (otro jugador de
-            la liga, de cualquiera de los dos grupos) o un <strong className="text-slate-300">invitado externo</strong>{' '}
-            (alguien de afuera). El invitado nunca suma puntos, y el titular ausente tampoco. Desempates: puntos →
-            partidos ganados → diferencia de games.
+            Si falta un titular, puede cubrirlo un <strong className="text-slate-300">apoyo</strong> (jugador del mismo
+            grupo y del mismo puesto) o un <strong className="text-slate-300">invitado externo</strong> (alguien de
+            afuera). El invitado nunca suma puntos, y el titular ausente tampoco. Con invitado de compañero no aplican
+            los extras (6-0, derrotas 7-6 / 7-5, fecha perfecta). Desempates: puntos → partidos ganados → diferencia
+            de games.
           </p>
         </div>
       )}

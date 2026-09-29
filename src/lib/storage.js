@@ -11,7 +11,10 @@
  * configurado vía GitHub Actions, así que en producción esto no aplica.
  */
 
-import { buildDefaultLeague, slug } from '../data/defaults.js';
+import {
+  buildDefaultLeague, buildCalendar, slug,
+  DEFAULT_FEES, FIRST_SEASON_DATES, SCORING_RULES_VERSION,
+} from '../data/defaults.js';
 import { supabase, SUPABASE_CONFIGURED } from './supabaseClient.js';
 
 const ROW_ID = 'puntaco';
@@ -138,16 +141,84 @@ function migrateFromV2(old) {
   return league;
 }
 
-/** Rellena lo que falte, para que una liga vieja o un archivo importado no rompa la app. */
+/**
+ * Rellena lo que falte, para que una liga vieja o un archivo importado no rompa la app.
+ *
+ * Una liga anterior a la versión 4 (los datos de prueba de las Fechas 1 y 2, con
+ * el reglamento viejo) arranca la temporada 1 limpia: se conservan los jugadores
+ * y los resultados viejos quedan guardados aparte en `legacy`, sin contar.
+ */
 function normalize(league) {
   const base = buildDefaultLeague();
+  const isOld = (league.version || 3) < 4;
+  const rulesOutdated = league.scoringRules !== SCORING_RULES_VERSION;
+  const groups = Array.isArray(league.groups) && league.groups.length ? league.groups : base.groups;
+
   return {
-    version: 3,
-    scoring: { ...base.scoring, ...(league.scoring || {}) },
-    groups: Array.isArray(league.groups) && league.groups.length ? league.groups : base.groups,
-    results: Array.isArray(league.results) ? league.results : [],
+    version: 4,
+    scoringRules: SCORING_RULES_VERSION,
+    scoring: rulesOutdated ? { ...base.scoring } : { ...base.scoring, ...(league.scoring || {}) },
+    seasonNumber: Number.isInteger(league.seasonNumber) && league.seasonNumber > 0 ? league.seasonNumber : 1,
+    history: Array.isArray(league.history) ? league.history : [],
+    repechaje: league.repechaje ?? null,
+    groups: isOld
+      ? groups.map((g) => ({ ...g, fechas: buildCalendar(g.players, FIRST_SEASON_DATES) }))
+      : groups,
+    results: isOld ? [] : Array.isArray(league.results) ? league.results : [],
+    legacy: isOld && Array.isArray(league.results) && league.results.length
+      ? { note: 'Fechas de prueba anteriores al Reglamento 2026', results: league.results }
+      : league.legacy ?? null,
     playoffs: league.playoffs ?? null,
   };
+}
+
+/* ---------------------------------------------------------------- finanzas */
+
+/**
+ * Cuotas, multas y pagos. Van en una tabla aparte que SOLO puede leer quien
+ * tiene la clave: la liga es pública, el dinero de cada jugador no.
+ */
+const FINANCE_KEY = 'puntaco-finance-v1';
+
+export function emptyFinance() {
+  return { fees: { ...DEFAULT_FEES }, entries: [] };
+}
+
+function normalizeFinance(data) {
+  return {
+    fees: { ...DEFAULT_FEES, ...(data?.fees || {}) },
+    entries: Array.isArray(data?.entries) ? data.entries : [],
+  };
+}
+
+export async function loadFinance() {
+  if (SUPABASE_CONFIGURED) {
+    const { data, error } = await supabase
+      .from('league_finance')
+      .select('data')
+      .eq('id', ROW_ID)
+      .maybeSingle();
+    if (error) throw new Error(`No se pudo leer los pagos: ${error.message}`);
+    return normalizeFinance(data?.data);
+  }
+  return normalizeFinance(readKey(FINANCE_KEY));
+}
+
+export async function saveFinance(finance) {
+  if (SUPABASE_CONFIGURED) {
+    const { data, error } = await supabase
+      .from('league_finance')
+      .upsert({ id: ROW_ID, data: finance }, { onConflict: 'id' })
+      .select('id');
+    if (error) throw new Error(`No se pudo guardar los pagos: ${error.message}`);
+    if (!data?.length) throw new Error('No se pudo guardar los pagos: hace falta ingresar con la clave.');
+    return;
+  }
+  try {
+    window.localStorage.setItem(FINANCE_KEY, JSON.stringify(finance));
+  } catch {
+    throw new Error('No se pudo guardar (almacenamiento local lleno o bloqueado).');
+  }
 }
 
 /* ------------------------------------------------- exportar / importar */
@@ -155,14 +226,14 @@ function normalize(league) {
 export function exportLeagueFile(league) {
   const stamp = new Date().toISOString().slice(0, 10);
   const blob = new Blob([JSON.stringify(league, null, 2)], { type: 'application/json' });
-  triggerDownload(blob, `puntaco-liga-${stamp}.json`);
+  triggerDownload(blob, `puntako-liga-${stamp}.json`);
 }
 
 export async function readLeagueFile(file) {
   const text = await file.text();
   const parsed = JSON.parse(text);
   if (!parsed || !Array.isArray(parsed.groups)) {
-    throw new Error('El archivo no tiene el formato de una liga de Puntaco.');
+    throw new Error('El archivo no tiene el formato de una liga de Puntako.');
   }
   return normalize(parsed);
 }

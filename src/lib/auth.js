@@ -12,6 +12,7 @@ import { supabase, SUPABASE_CONFIGURED, ADMIN_EMAIL } from './supabaseClient.js'
 export function useAuth() {
   const [session, setSession] = useState(null);
   const [ready, setReady] = useState(!SUPABASE_CONFIGURED);
+  const [recovering, setRecovering] = useState(false); // llegó desde el link del mail de "olvidé la clave"
 
   useEffect(() => {
     if (!SUPABASE_CONFIGURED) return undefined;
@@ -21,8 +22,9 @@ export function useAuth() {
       setReady(true);
     });
 
-    const { data: sub } = supabase.auth.onAuthStateChange((_event, next) => {
+    const { data: sub } = supabase.auth.onAuthStateChange((event, next) => {
       setSession(next);
+      if (event === 'PASSWORD_RECOVERY') setRecovering(true);
     });
 
     return () => sub.subscription.unsubscribe();
@@ -39,7 +41,21 @@ export function useAuth() {
     await supabase.auth.signOut();
   }, []);
 
+  /** Manda un mail con un link para elegir una clave nueva. */
+  const sendPasswordReset = useCallback(async () => {
+    if (!SUPABASE_CONFIGURED) return { error: null };
+    const redirectTo = `${window.location.origin}${window.location.pathname}`;
+    const { error } = await supabase.auth.resetPasswordForEmail(ADMIN_EMAIL, { redirectTo });
+    return { error };
+  }, []);
+
+  const updatePassword = useCallback(async (password) => {
+    const { error } = await supabase.auth.updateUser({ password });
+    if (!error) setRecovering(false);
+    return { error };
+  }, []);
+
   const canEdit = !SUPABASE_CONFIGURED || Boolean(session);
 
-  return { ready, canEdit, signIn, signOut };
+  return { ready, canEdit, recovering, signIn, signOut, sendPasswordReset, updatePassword };
 }

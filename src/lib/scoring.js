@@ -65,9 +65,9 @@ export function countInvalid(matches) {
  *   { playerId, guestName, originalPlayerId }
  *
  * - playerId === originalPlayerId  → titular, puntúa normal
- * - playerId distinto              → "apoyo": otro jugador de la liga (de cualquier
- *                                     grupo) que cubre el puesto. Puntúa fijo según
- *                                     si ganó o perdió (apoyoVictoria / apoyoDerrota).
+ * - playerId distinto              → "apoyo": otro jugador del MISMO grupo que cubre
+ *                                     el puesto (drive por drive, revés por revés).
+ *                                     Puntúa según el reglamento de apoyo.
  * - playerId === null              → invitado externo (guestName), no puntúa nadie
  */
 export function slotKind(slot) {
@@ -114,10 +114,11 @@ function blankRow(player) {
     fechasJugadas: 0,
     // Desglose, para poder mostrar de dónde sale cada punto sin recalcularlo.
     ptsWins: 0,
-    ptsTieBreaks: 0,
+    ptsTieBreaks: 0, // puntos por derrotas 7-6 y 7-5
     ptsBonus: 0,
     ptsApoyo: 0,
     ptsShutout: 0, // bonus/castigo por partidos 6-0 (positivo o negativo)
+    derrotas06: 0, // partidos perdidos 0-6 (multa de 5.000 Gs.)
   };
 }
 
@@ -159,6 +160,46 @@ export function slotsForMatch(result, pairIdx, match) {
   return [override.drive || base.drive, override.reves || base.reves];
 }
 
+
+/**
+ * Puntos de UN jugador en UN partido, según el Reglamento Puntako 2026.
+ *
+ *   kind        'titular' | 'apoyo'
+ *   isWin       si su pareja ganó
+ *   resolved    resultado de resolveMatch (usa isTieBreak)
+ *   guestPartner  su compañero fue un invitado externo: no aplican los extras
+ *                 (6-0, derrotas 7-6 / 7-5, castigo 0-6). Sí el puntaje base.
+ *
+ * Devuelve { points, part } donde `part` dice en qué renglón del desglose cae.
+ */
+export function matchPoints(scoring, { kind, isWin, resolved, winnerGames, loserGames, guestPartner }) {
+  const shutout = winnerGames === 6 && loserGames === 0;
+  const extras = !guestPartner;
+
+  if (kind === 'apoyo') {
+    if (isWin) {
+      return { points: extras && shutout ? scoring.apoyoVictoria60 : scoring.apoyoVictoria, part: 'apoyo' };
+    }
+    let points = scoring.apoyoDerrota;
+    if (extras && shutout) points = scoring.apoyoDerrota06;
+    else if (extras && resolved.isTieBreak) points = scoring.apoyoDerrotaTieBreak;
+    return { points, part: 'apoyo' };
+  }
+
+  if (isWin) {
+    return { points: scoring.victoria + (extras && shutout ? scoring.bonus60 : 0), part: 'victoria', shutoutExtra: extras && shutout ? scoring.bonus60 : 0 };
+  }
+  if (extras && shutout) return { points: -scoring.penalizacion06, part: 'shutout' };
+  if (extras && resolved.isTieBreak) return { points: scoring.derrotaTieBreak, part: 'tiebreak' };
+  if (extras && winnerGames === 7 && loserGames === 5) return { points: scoring.derrota75, part: 'tiebreak' };
+  return { points: scoring.derrotaNormal, part: 'normal' };
+}
+
+/** ¿El compañero de este puesto (en este partido) es un invitado externo? */
+function partnerIsGuest(slots, myPos) {
+  return slotKind(slots[myPos === 0 ? 1 : 0]) === 'invitado';
+}
+
 export function computeStandings(league, groupId) {
   const group = league.groups.find((g) => g.id === groupId);
   if (!group) return [];
@@ -181,53 +222,36 @@ export function computeStandings(league, groupId) {
         played[loserPairIdx] += 1;
         wins[winnerPairIdx] += 1;
 
-        slotsForMatch(result, winnerPairIdx, match).forEach((slot) => {
-          const kind = slotKind(slot);
-          const row = rows.get(slot?.playerId);
-          if (!row || kind === 'invitado') return;
-          row.pj += 1;
-          row.pg += 1;
-          row.gamesWon += winnerGames;
-          row.gamesLost += loserGames;
-          if (kind === 'apoyo') {
-            row.apoyoMatches += 1;
-            row.ptsApoyo += scoring.apoyoVictoria;
-            row.points += scoring.apoyoVictoria;
-          } else {
-            row.ptsWins += scoring.victoria;
-            row.points += scoring.victoria;
-          }
-          if (winnerGames === 6 && loserGames === 0) {
-            row.ptsShutout += scoring.bonus60;
-            row.points += scoring.bonus60;
-          }
-          touched.add(slot.playerId);
-        });
-
-        slotsForMatch(result, loserPairIdx, match).forEach((slot) => {
-          const kind = slotKind(slot);
-          const row = rows.get(slot?.playerId);
-          if (!row || kind === 'invitado') return;
-          row.pj += 1;
-          row.gamesWon += loserGames;
-          row.gamesLost += winnerGames;
-          if (resolved.isTieBreak) row.ppTieBreak += 1;
-          else row.ppNormal += 1;
-          if (kind === 'apoyo') {
-            row.apoyoMatches += 1;
-            row.ptsApoyo += scoring.apoyoDerrota;
-            row.points += scoring.apoyoDerrota;
-          } else {
-            const p = resolved.isTieBreak ? scoring.derrotaTieBreak : scoring.derrotaNormal;
-            if (resolved.isTieBreak) row.ptsTieBreaks += p;
-            row.points += p;
-          }
-          if (winnerGames === 6 && loserGames === 0) {
-            row.ptsShutout -= scoring.penalizacion06;
-            row.points -= scoring.penalizacion06;
-          }
-          touched.add(slot.playerId);
-        });
+        const apply = (pairIdx, isWin) => {
+          const slots = slotsForMatch(result, pairIdx, match);
+          slots.forEach((slot, pos) => {
+            const kind = slotKind(slot);
+            const row = rows.get(slot?.playerId);
+            if (!row || kind === 'invitado') return;
+            const guestPartner = partnerIsGuest(slots, pos);
+            const { points, part, shutoutExtra } = matchPoints(scoring, {
+              kind, isWin, resolved, winnerGames, loserGames, guestPartner,
+            });
+            row.pj += 1;
+            row.gamesWon += isWin ? winnerGames : loserGames;
+            row.gamesLost += isWin ? loserGames : winnerGames;
+            if (isWin) row.pg += 1;
+            else if (resolved.isTieBreak) row.ppTieBreak += 1;
+            else row.ppNormal += 1;
+            if (kind === 'apoyo') row.apoyoMatches += 1;
+            if (part === 'apoyo') row.ptsApoyo += points;
+            else if (part === 'victoria') {
+              row.ptsWins += scoring.victoria;
+              row.ptsShutout += shutoutExtra;
+            } else if (part === 'tiebreak') row.ptsTieBreaks += points;
+            else if (part === 'shutout') row.ptsShutout += points;
+            if (!isWin && winnerGames === 6 && loserGames === 0) row.derrotas06 += 1;
+            row.points += points;
+            touched.add(slot.playerId);
+          });
+        };
+        apply(winnerPairIdx, true);
+        apply(loserPairIdx, false);
       });
 
       // Fecha perfecta: la pareja ganó sus 4 partidos.
@@ -247,6 +271,12 @@ export function computeStandings(league, groupId) {
             occupants.length === PAIRS_PER_FECHA - 1 &&
             occupants.every((s) => slotKind(s) === 'titular' && s?.playerId === first?.playerId);
           if (!siempreElMismoTitular) return;
+          // Con un invitado de compañero en algún partido, los extras no aplican.
+          const otherPos = slotPos === 0 ? 1 : 0;
+          const conInvitado = matchesOfPair.some(
+            (m) => slotKind(slotsForMatch(result, i, m)[otherPos]) === 'invitado',
+          );
+          if (conInvitado) return;
 
           const row = rows.get(first.playerId);
           if (!row) return;
@@ -321,13 +351,11 @@ export function buildPlayerProfile(league, groupId, playerId) {
           const partner = slots[myIdx === 0 ? 1 : 0];
           const rivalSlots = slotsForMatch(result, isWin ? loserPairIdx : winnerPairIdx, match);
 
-          let points;
-          if (kind === 'apoyo') points = isWin ? scoring.apoyoVictoria : scoring.apoyoDerrota;
-          else if (isWin) points = scoring.victoria;
-          else points = resolved.isTieBreak ? scoring.derrotaTieBreak : scoring.derrotaNormal;
-
+          const guestPartner = slotKind(partner) === 'invitado';
+          const { points } = matchPoints(scoring, {
+            kind, isWin, resolved, winnerGames, loserGames, guestPartner,
+          });
           const isShutout = winnerGames === 6 && loserGames === 0;
-          if (isShutout) points += isWin ? scoring.bonus60 : -scoring.penalizacion06;
 
           const partnerName = nameOf(partner);
           const tally = partnerTally.get(partnerName) || { name: partnerName, played: 0, won: 0 };
@@ -383,11 +411,11 @@ export function formatStandingsForShare(rows, group, fechasJugadas, scoring) {
   const medals = ['🥇', '🥈', '🥉'];
   const lines = rows.map((p, i) => `${medals[i] || `${i + 1}.`} ${p.name} — ${p.points} pts (${p.pg}/${p.pj})`);
   return [
-    `🎾 PUNTACO PÁDEL — ${group.name.toUpperCase()}`,
+    `🎾 PUNTAKO PÁDEL — ${group.name.toUpperCase()}`,
     `Fechas jugadas: ${fechasJugadas}`,
     '',
     ...lines,
     '',
-    `Victoria +${scoring.victoria} · Derrota en TB +${scoring.derrotaTieBreak} · Fecha perfecta +${scoring.fechaPerfecta}`,
+    `Victoria +${scoring.victoria} · Derrota 7-6 +${scoring.derrotaTieBreak} · Fecha perfecta +${scoring.fechaPerfecta}`,
   ].join('\n');
 }

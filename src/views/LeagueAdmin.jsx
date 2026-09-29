@@ -311,13 +311,17 @@ function DuplicateWarning({ pairs }) {
 
 const SCORING_LABELS = {
   victoria: 'Ganar un partido',
-  derrotaTieBreak: 'Perder en tie-break',
+  derrotaTieBreak: 'Perder 7-6',
+  derrota75: 'Perder 7-5',
   derrotaNormal: 'Perder normalmente',
   fechaPerfecta: 'Bonus por fecha perfecta',
-  apoyoVictoria: 'Apoyo que gana su partido',
-  apoyoDerrota: 'Apoyo que pierde su partido',
   bonus60: 'Extra por ganar 6-0',
   penalizacion06: 'Se resta por perder 0-6',
+  apoyoVictoria: 'Apoyo que gana su partido',
+  apoyoDerrota: 'Apoyo que pierde (entrar a jugar)',
+  apoyoVictoria60: 'Apoyo que gana 6-0 (total)',
+  apoyoDerrotaTieBreak: 'Apoyo que pierde 7-6 (total)',
+  apoyoDerrota06: 'Apoyo que pierde 0-6 (total)',
 };
 
 function ScoringTab({ scoring, onUpdateScoring }) {

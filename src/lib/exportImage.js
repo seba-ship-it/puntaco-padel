@@ -60,7 +60,7 @@ export function downloadStandingsImage(rows, group, subtitle, scoring) {
   ctx.fillStyle = C.title;
   ctx.font = font(38, '800');
   ctx.textBaseline = 'alphabetic';
-  ctx.fillText('🎾 PUNTACO PÁDEL', PAD, 72);
+  ctx.fillText('🎾 PUNTAKO PÁDEL', PAD, 72);
 
   ctx.fillStyle = accent;
   ctx.font = font(24, '700');
@@ -152,13 +152,13 @@ export function downloadStandingsImage(rows, group, subtitle, scoring) {
   ctx.fillStyle = C.muted;
   ctx.font = font(14, '500');
   ctx.fillText(
-    `Victoria +${scoring.victoria}  ·  Derrota en tie-break +${scoring.derrotaTieBreak}  ·  Fecha perfecta +${scoring.fechaPerfecta}  ·  Apoyo +${scoring.apoyoVictoria}/+${scoring.apoyoDerrota}`,
+    `Victoria +${scoring.victoria}  ·  Derrota 7-6 +${scoring.derrotaTieBreak}  ·  7-5 +${scoring.derrota75}  ·  Fecha perfecta +${scoring.fechaPerfecta}  ·  Apoyo +${scoring.apoyoDerrota}/+${scoring.apoyoVictoria}`,
     PAD,
     fy + 8,
   );
 
   const stamp = new Date().toISOString().slice(0, 10);
-  const filename = `puntaco-${group.name.toLowerCase().replace(/\s+/g, '-')}-${stamp}.png`;
+  const filename = `puntako-${group.name.toLowerCase().replace(/\s+/g, '-')}-${stamp}.png`;
 
   return new Promise((resolve, reject) => {
     canvas.toBlob((blob) => {

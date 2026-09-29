@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { BarChart3, Calendar, Settings, Pencil, Trophy, RefreshCw, AlertTriangle } from 'lucide-react';
+import { BarChart3, Calendar, Settings, Pencil, Trophy, RefreshCw, AlertTriangle, BookOpen, Wallet, Award } from 'lucide-react';
 
 import { buildDefaultLeague, slug } from './data/defaults.js';
 import {
@@ -21,7 +21,11 @@ import {
   exportLeagueFile,
   readLeagueFile,
   resetLeague,
+  loadFinance,
+  saveFinance,
+  emptyFinance,
 } from './lib/storage.js';
+import { closeSeason, applyRepechaje, seasonProgress } from './lib/season.js';
 import { SUPABASE_CONFIGURED } from './lib/supabaseClient.js';
 import { useAuth } from './lib/auth.js';
 import { downloadStandingsImage } from './lib/exportImage.js';
@@ -33,6 +37,9 @@ import Fechas from './views/Fechas.jsx';
 import LoadFecha from './views/LoadFecha.jsx';
 import PlayerProfile from './views/PlayerProfile.jsx';
 import LeagueAdmin from './views/LeagueAdmin.jsx';
+import Temporada from './views/Temporada.jsx';
+import Reglamento from './views/Reglamento.jsx';
+import Pagos from './views/Pagos.jsx';
 
 const DRAFTS_KEY = 'puntaco-drafts-v3';
 
@@ -53,13 +60,14 @@ export default function App() {
       return {};
     }
   });
-  const [view, setView] = useState('standings'); // standings | fechas | load | player | admin
+  const [view, setView] = useState('standings'); // standings | fechas | load | player | admin | temporada | reglamento | pagos
   const [groupId, setGroupId] = useState('A');
   const [editingKey, setEditingKey] = useState(null);
   const [selectedPlayerId, setSelectedPlayerId] = useState(null);
   const [notification, setNotification] = useState(null);
 
-  const { canEdit, signIn, signOut } = useAuth();
+  const { canEdit, recovering, signIn, signOut, sendPasswordReset, updatePassword } = useAuth();
+  const [finance, setFinance] = useState(null); // solo se carga con la clave
 
   const showToast = useCallback((msg, type = 'success') => setNotification({ msg, type }), []);
 
@@ -137,6 +145,26 @@ export default function App() {
     // Mientras carga, o si la carga falló, lo que hay en pantalla no es la liga real.
     canEditRef.current = canEdit && !loadError && !syncing;
   }, [canEdit, loadError, syncing]);
+
+  // Pagos y multas: tabla privada, solo se lee con la clave puesta.
+  useEffect(() => {
+    if (!canEdit || loadError || syncing) {
+      setFinance(null);
+      return undefined;
+    }
+    let cancelled = false;
+    loadFinance()
+      .then((f) => !cancelled && setFinance(f))
+      .catch((err) => !cancelled && (setFinance(emptyFinance()), showToast(err.message, 'error')));
+    return () => {
+      cancelled = true;
+    };
+  }, [canEdit, loadError, syncing, showToast]);
+
+  const handleFinanceChange = (next) => {
+    setFinance(next);
+    saveFinance(next).catch((err) => showToast(err.message || 'No se pudo guardar.', 'error'));
+  };
 
   // Guarda cada cambio propio. No guarda: el render inicial (liga vacía), lo que
   // llega del servidor, ni nada en modo solo lectura — quien no tiene la clave
@@ -442,6 +470,39 @@ export default function App() {
     showToast(`Fecha ${fechaNum} borrada del calendario.`);
   };
 
+  /* ------------------------------------------------------- temporada */
+
+  const handleCloseSeason = () => {
+    if (!seasonProgress(league).complete) {
+      showToast('Faltan fechas por completar.', 'error');
+      return;
+    }
+    if (
+      !window.confirm(
+        `¿Cerrar la temporada ${league.seasonNumber}? Se guarda en el historial, suben y bajan los jugadores y empieza la temporada ${league.seasonNumber + 1} desde cero.`,
+      )
+    )
+      return;
+    try {
+      setLeague(closeSeason(league));
+      setDrafts({});
+      setEditingKey(null);
+      showToast(`Temporada ${league.seasonNumber} cerrada. Empieza la ${league.seasonNumber + 1}.`);
+    } catch (err) {
+      showToast(err.message, 'error');
+    }
+  };
+
+  const handleApplyRepechaje = (scoreA, scoreB) => {
+    try {
+      const next = applyRepechaje(league, scoreA, scoreB);
+      setLeague(next);
+      showToast(next.repechaje.winner === 'B' ? 'Repechaje registrado: asciende la pareja del Grupo B.' : 'Repechaje registrado: se mantienen en sus grupos.');
+    } catch (err) {
+      showToast(err.message, 'error');
+    }
+  };
+
   /* --------------------------------------------------------- puntaje */
 
   const handleUpdateScoring = (key, value) => {
@@ -488,7 +549,7 @@ export default function App() {
     const text = formatStandingsForShare(standings, group, fechasJugadas, league.scoring);
     try {
       if (navigator.share) {
-        await navigator.share({ title: `Puntaco Pádel — ${group.name}`, text });
+        await navigator.share({ title: `Puntako Pádel — ${group.name}`, text });
         return;
       }
       await navigator.clipboard.writeText(text);
@@ -513,6 +574,9 @@ export default function App() {
   const navItems = [
     { id: 'standings', label: 'Tabla', icon: BarChart3 },
     { id: 'fechas', label: 'Fechas', icon: Calendar },
+    { id: 'temporada', label: 'Temporada', icon: Award },
+    { id: 'reglamento', label: 'Reglamento', icon: BookOpen },
+    ...(canEdit && !loadError ? [{ id: 'pagos', label: 'Pagos', icon: Wallet }] : []),
     { id: 'admin', label: 'Liga', icon: Settings },
   ];
 
@@ -534,9 +598,9 @@ export default function App() {
               🎾
             </div>
             <div className="min-w-0">
-              <h1 className="text-base font-black tracking-tight text-white leading-tight truncate">Puntaco Pádel</h1>
+              <h1 className="text-base font-black tracking-tight text-white leading-tight truncate">Puntako Pádel</h1>
               <p className="text-[11px] text-slate-500 leading-tight flex items-center gap-1">
-                {fechasCompletas} de {group.fechas.length} fechas completas
+                Temporada {league.seasonNumber} · {fechasCompletas} de {group.fechas.length} fechas completas
                 {syncing && <RefreshCw className="w-2.5 h-2.5 animate-spin text-slate-600" />}
               </p>
             </div>
@@ -561,7 +625,14 @@ export default function App() {
                 </button>
               ))}
             </div>
-            <AuthGate canEdit={canEdit} onSignIn={signIn} onSignOut={signOut} />
+            <AuthGate
+              canEdit={canEdit}
+              recovering={recovering}
+              onSignIn={signIn}
+              onSignOut={signOut}
+              onSendReset={sendPasswordReset}
+              onUpdatePassword={updatePassword}
+            />
           </div>
         </div>
 
@@ -637,6 +708,21 @@ export default function App() {
           />
         )}
 
+        {view === 'temporada' && (
+          <Temporada
+            league={league}
+            canEdit={canEdit && !loadError}
+            onCloseSeason={requireAuth(handleCloseSeason)}
+            onApplyRepechaje={requireAuth(handleApplyRepechaje)}
+          />
+        )}
+
+        {view === 'reglamento' && <Reglamento scoring={league.scoring} fees={finance?.fees || emptyFinance().fees} />}
+
+        {view === 'pagos' && canEdit && finance && (
+          <Pagos league={league} finance={finance} onChange={handleFinanceChange} />
+        )}
+
         {view === 'load' && editing && editingGroup && (
           <LoadFecha
             group={editingGroup}
@@ -700,7 +786,7 @@ export default function App() {
       <footer className="border-t border-slate-800 py-4 mt-auto">
         <div className="max-w-5xl mx-auto px-4 flex items-center justify-center gap-2 text-[11px] text-slate-600">
           <Trophy className="w-3.5 h-3.5" />
-          Puntaco Pádel ·{' '}
+          Puntako Pádel ·{' '}
           {SUPABASE_CONFIGURED
             ? 'los datos se guardan en la nube, compartidos con todos'
             : 'modo local: los datos se guardan solo en este navegador'}

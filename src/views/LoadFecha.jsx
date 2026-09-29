@@ -26,6 +26,18 @@ export default function LoadFecha({
   const played = countPlayed(draft.matches);
   const allPlayers = [...group.players, ...(otherGroup?.players || [])];
 
+  // Reglamento: máximo 1 partido de apoyo por jugador por fecha (lunes).
+  const apoyoCount = new Map();
+  draft.matches.forEach((m) => {
+    if (!resolveMatch(m).played) return;
+    [m.p1Idx, m.p2Idx].forEach((pairIdx) => {
+      slotsForMatch(draft, pairIdx, m).forEach((slot) => {
+        if (slotKind(slot) === 'apoyo') apoyoCount.set(slot.playerId, (apoyoCount.get(slot.playerId) || 0) + 1);
+      });
+    });
+  });
+  const apoyoAbuse = Array.from(apoyoCount.entries()).filter(([, n]) => n > 1);
+
   const nameOf = (slot) => {
     if (!slot) return '—';
     if (!slot.playerId) return slot.guestName?.trim() || 'Invitado';
@@ -61,6 +73,16 @@ export default function LoadFecha({
         </div>
         <ProgressBar done={played} total={MATCHES_PER_FECHA} accent={theme.bg} />
       </div>
+
+      {apoyoAbuse.length > 0 && (
+        <p className="text-xs text-amber-400 font-semibold bg-amber-500/10 border border-amber-500/30 rounded-lg px-3 py-2 flex items-start gap-2">
+          <AlertTriangle className="w-4 h-4 shrink-0" />
+          <span>
+            Reglamento: máximo 1 partido de apoyo por jugador por lunes. Hoy lo pasan:{' '}
+            {apoyoAbuse.map(([id, n]) => `${nameOf({ playerId: id })} (${n})`).join(', ')}.
+          </span>
+        </p>
+      )}
 
       {/* Cambios de jugadores: plegado, porque lo normal es que jueguen los titulares */}
       <details className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden group">
@@ -140,8 +162,8 @@ export default function LoadFecha({
 }
 
 /**
- * Elige quién ocupó un puesto: el titular, un "apoyo" (otro jugador de la
- * liga, de este grupo o del otro), o un invitado de afuera.
+ * Elige quién ocupó un puesto: el titular, un "apoyo" (jugador del mismo grupo y
+ * del mismo puesto), o un invitado de afuera.
  */
 function SlotPicker({ label, roleColor, slot, players, otherGroup, scoring, onChange }) {
   const kind = slotKind(slot);
@@ -178,24 +200,16 @@ function SlotPicker({ label, roleColor, slot, players, otherGroup, scoring, onCh
         className="w-full bg-slate-900 border border-slate-700 rounded-lg px-2 py-1.5 text-xs text-white font-semibold focus:outline-none focus:border-slate-500"
       >
         {original && <option value={original.id}>{original.name} (titular)</option>}
-        <optgroup label="Apoyo de este grupo">
+        {/* Reglamento: el apoyo es del mismo grupo y del mismo puesto (drive por drive, revés por revés). */}
+        <optgroup label={`Apoyo (${original?.role || 'mismo puesto'} de este grupo)`}>
           {players
-            .filter((p) => p.id !== slot.originalPlayerId)
+            .filter((p) => p.id !== slot.originalPlayerId && (!original || p.role === original.role))
             .map((p) => (
               <option key={p.id} value={p.id}>
                 {p.name}
               </option>
             ))}
         </optgroup>
-        {otherGroup && otherGroup.players.length > 0 && (
-          <optgroup label={`Apoyo de ${otherGroup.name}`}>
-            {otherGroup.players.map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.name}
-              </option>
-            ))}
-          </optgroup>
-        )}
         <option value="__guest__">Invitado de afuera…</option>
       </select>
 

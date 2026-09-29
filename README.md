@@ -1,4 +1,4 @@
-# Puntaco Pádel
+# Puntako Pádel
 
 Liga de pádel con tabla de posiciones, calendario, perfiles de jugador y carga
 de resultados. Los datos viven en una base de datos de Supabase compartida
