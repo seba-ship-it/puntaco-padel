@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { BarChart3, Calendar, Settings, Pencil, Trophy, RefreshCw } from 'lucide-react';
+import { BarChart3, Calendar, Settings, Pencil, Trophy, RefreshCw, AlertTriangle } from 'lucide-react';
 
 import { buildDefaultLeague, slug } from './data/defaults.js';
 import {
@@ -41,6 +41,7 @@ export default function App() {
   // abajo corran siempre en el mismo orden; la real llega enseguida, async.
   const [league, setLeague] = useState(() => buildDefaultLeague());
   const [syncing, setSyncing] = useState(true);
+  const [loadError, setLoadError] = useState(null);
   const hydrated = useRef(false);
   const skipNextSave = useRef(false);
   const lastSaved = useRef(null); // para reconocer el eco de nuestro propio guardado
@@ -66,13 +67,21 @@ export default function App() {
   const requireAuth = useCallback(
     (fn) =>
       (...args) => {
+        if (syncing) {
+          showToast('Todavía se está cargando la liga. Esperá un momento.', 'error');
+          return undefined;
+        }
+        if (loadError) {
+          showToast('Sin conexión con la base de datos: la edición está bloqueada para no pisar los datos.', 'error');
+          return undefined;
+        }
         if (!canEdit) {
           showToast('Necesitás la clave para cargar o editar. Tocá el candado 🔒 arriba.', 'error');
           return undefined;
         }
         return fn(...args);
       },
-    [canEdit, showToast],
+    [canEdit, loadError, syncing, showToast],
   );
 
   useEffect(() => {
@@ -92,9 +101,13 @@ export default function App() {
         // Lo que viene del servidor no hay que volver a guardarlo.
         skipNextSave.current = true;
         setLeague(loaded);
+        setLoadError(null);
       })
       .catch((err) => {
-        if (!cancelled) showToast(err.message || 'No se pudo cargar la liga.', 'error');
+        if (cancelled) return;
+        // La liga en pantalla es la de relleno, NO la real: hay que impedir que
+        // cualquier edición posterior la guarde encima de la temporada.
+        setLoadError(err.message || 'No se pudo cargar la liga.');
       })
       .finally(() => {
         if (!cancelled) setSyncing(false);
@@ -119,10 +132,11 @@ export default function App() {
 
   // `canEdit` se lee por referencia: si estuviera en las dependencias, iniciar
   // sesión dispararía un guardado sin que nadie haya cambiado nada.
-  const canEditRef = useRef(canEdit);
+  const canEditRef = useRef(false);
   useEffect(() => {
-    canEditRef.current = canEdit;
-  }, [canEdit]);
+    // Mientras carga, o si la carga falló, lo que hay en pantalla no es la liga real.
+    canEditRef.current = canEdit && !loadError && !syncing;
+  }, [canEdit, loadError, syncing]);
 
   // Guarda cada cambio propio. No guarda: el render inicial (liga vacía), lo que
   // llega del servidor, ni nada en modo solo lectura — quien no tiene la clave
@@ -260,8 +274,13 @@ export default function App() {
 
   const handleSaveFecha = () => {
     if (!editing || !editingKey) return;
-    if (!canEdit) {
-      showToast('Se cerró tu sesión de edición. Volvé a ingresar la clave.', 'error');
+    if (!canEdit || loadError) {
+      showToast(
+        loadError
+          ? 'Sin conexión con la base de datos: no se guardó nada.'
+          : 'Se cerró tu sesión de edición. Volvé a ingresar la clave.',
+        'error',
+      );
       return;
     }
 
@@ -572,6 +591,23 @@ export default function App() {
       </header>
 
       <main className="flex-1 w-full max-w-5xl mx-auto px-4 py-5">
+        {loadError && (
+          <div className="mb-4 bg-rose-500/10 border border-rose-500/40 rounded-xl px-4 py-3 flex items-start gap-3">
+            <AlertTriangle className="w-4 h-4 text-rose-400 shrink-0 mt-0.5" />
+            <div className="flex-1 min-w-0 space-y-1">
+              <p className="text-sm font-bold text-rose-200">No se pudo conectar con la base de datos</p>
+              <p className="text-xs text-rose-300/80 leading-relaxed">
+                Lo que ves acá NO es la liga real. La edición está bloqueada para no pisar los datos guardados.
+              </p>
+            </div>
+            <button
+              onClick={() => window.location.reload()}
+              className="px-3 py-1.5 rounded-lg text-xs font-bold bg-rose-500/20 text-rose-200 border border-rose-500/40 hover:bg-rose-500/30 shrink-0 transition-colors"
+            >
+              Reintentar
+            </button>
+          </div>
+        )}
         {view === 'standings' && (
           <Standings
             standings={standings}
@@ -594,7 +630,7 @@ export default function App() {
             league={league}
             drafts={drafts}
             scoring={league.scoring}
-            canEdit={canEdit}
+            canEdit={canEdit && !loadError}
             onOpenFecha={requireAuth(openFecha)}
             onDeleteFecha={requireAuth(handleDeleteResults)}
             onAddFecha={requireAuth(() => handleAddFecha(group.id))}
@@ -646,7 +682,7 @@ export default function App() {
           <LeagueAdmin
             group={group}
             league={league}
-            canEdit={canEdit}
+            canEdit={canEdit && !loadError}
             onAddPlayer={requireAuth(handleAddPlayer)}
             onUpdatePlayer={requireAuth(handleUpdatePlayer)}
             onDeletePlayer={requireAuth(handleDeletePlayer)}
