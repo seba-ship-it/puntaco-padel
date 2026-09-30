@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { ArrowUp, ArrowDown, Shield, Trophy, History, Lock } from 'lucide-react';
+import { ArrowUp, ArrowDown, Shield, Trophy, History, Lock, ImageDown } from 'lucide-react';
 import { EmptyState, ProgressBar, SectionTitle, themeFor } from '../components/ui.jsx';
 import { formatDate } from '../data/defaults.js';
 import { planMovements, seasonProgress } from '../lib/season.js';
@@ -10,7 +10,7 @@ const ROLE_STYLE = { Drive: 'text-blue-300', Revés: 'text-purple-300' };
  * Temporada en curso (cierre, ascensos, descensos y repechaje) e historial de
  * las temporadas anteriores.
  */
-export default function Temporada({ league, canEdit, onCloseSeason, onApplyRepechaje }) {
+export default function Temporada({ league, canEdit, onCloseSeason, onApplyRepechaje, onExportSeason }) {
   const progress = seasonProgress(league);
   const movements = planMovements(league);
   const rep = league.repechaje;
@@ -61,7 +61,7 @@ export default function Temporada({ league, canEdit, onCloseSeason, onApplyRepec
         {league.history.length === 0 ? (
           <EmptyState message="Todavía no hay temporadas cerradas. Acá van a aparecer los campeones y los movimientos de cada una." />
         ) : (
-          [...league.history].reverse().map((s) => <SeasonCard key={s.number} season={s} repechaje={rep} />)
+          [...league.history].reverse().map((s) => <SeasonCard key={s.number} season={s} repechaje={rep} onExport={onExportSeason} />)
         )}
       </section>
     </div>
@@ -162,7 +162,7 @@ function RepechajeCard({ rep, nameOf, canEdit, seasonNumber, onApply }) {
   );
 }
 
-function SeasonCard({ season, repechaje }) {
+function SeasonCard({ season, repechaje, onExport }) {
   const [open, setOpen] = useState(false);
   const rep = repechaje && repechaje.fromSeason === season.number ? repechaje : null;
 
@@ -206,9 +206,21 @@ function SeasonCard({ season, repechaje }) {
         )}
       </div>
 
-      <button onClick={() => setOpen((v) => !v)} className="text-[11px] font-bold text-slate-400 hover:text-white underline underline-offset-2">
-        {open ? 'Ocultar tablas' : 'Ver tablas finales'}
-      </button>
+      <div className="flex flex-wrap items-center gap-2">
+        <button onClick={() => setOpen((v) => !v)} className="text-[11px] font-bold text-slate-400 hover:text-white underline underline-offset-2 mr-2">
+          {open ? 'Ocultar tablas' : 'Ver tablas finales'}
+        </button>
+        {season.groups.map((g) => (
+          <button
+            key={g.id}
+            onClick={() => onExport(season, g.id)}
+            className="px-2.5 py-1.5 rounded-lg text-[11px] font-bold flex items-center gap-1.5 bg-slate-800 text-slate-200 hover:bg-slate-700 transition-colors"
+          >
+            <ImageDown className="w-3.5 h-3.5" />
+            Imagen {g.name}
+          </button>
+        ))}
+      </div>
 
       {open && (
         <div className="grid sm:grid-cols-2 gap-2 pk-fade">

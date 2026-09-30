@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Check, Trash2, Lock } from 'lucide-react';
+import { Check, Trash2, Lock, ImageDown } from 'lucide-react';
 import { ProgressBar, RulesPanel, SectionTitle, PAIR_COLORS, themeFor } from '../components/ui.jsx';
 import { formatDate } from '../data/defaults.js';
 import { MATCHES_PER_FECHA, countPlayed } from '../lib/scoring.js';
@@ -15,6 +15,7 @@ export default function Fechas({
   scoring,
   canEdit = true,
   onOpenFecha,
+  onExportFecha,
   onDeleteFecha,
 }) {
   const [rulesOpen, setRulesOpen] = useState(false);
@@ -75,6 +76,16 @@ export default function Fechas({
               )}
 
               <div className="p-3 border-t border-slate-800 flex gap-2">
+                {played > 0 && (
+                  <button
+                    onClick={() => onExportFecha(group.id, fecha.num)}
+                    title={`Bajar el resumen de la fecha ${fecha.num} como imagen`}
+                    className="px-3 rounded-lg text-xs font-bold flex items-center gap-1.5 bg-slate-800 text-slate-200 hover:bg-slate-700 transition-colors"
+                  >
+                    <ImageDown className="w-4 h-4" />
+                    <span className="hidden sm:inline">Resumen</span>
+                  </button>
+                )}
                 <button
                   onClick={() => onOpenFecha(group.id, fecha.num)}
                   title={canEdit ? undefined : 'Necesitás la clave para cargar resultados'}

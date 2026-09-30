@@ -407,6 +407,51 @@ export function buildPlayerProfile(league, groupId, playerId) {
 }
 
 /* -------------------------------------------------------------------------
+   Resumen de una jornada
+   ------------------------------------------------------------------------- */
+
+/**
+ * Todo lo que pasó en UNA fecha de un grupo: cada partido con sus parejas y
+ * marcador, y cuánto sumó cada jugador solo en esa fecha.
+ */
+export function buildFechaSummary(league, groupId, fechaNum) {
+  const result = league.results.find((r) => r.groupId === groupId && r.fechaNum === fechaNum);
+  const group = league.groups.find((g) => g.id === groupId);
+  if (!result || !group) return null;
+
+  const allPlayers = league.groups.flatMap((g) => g.players);
+  const label = (slot) => {
+    const kind = slotKind(slot);
+    if (kind === 'invitado') return `${slot?.guestName?.trim() || 'Invitado'} (inv.)`;
+    const name = allPlayers.find((p) => p.id === slot.playerId)?.name || '—';
+    return kind === 'apoyo' ? `${name} (apoyo)` : name;
+  };
+
+  const matches = (result.matches || [])
+    .map((m) => {
+      const r = resolveMatch(m);
+      if (!r.played) return null;
+      return {
+        pair1: slotsForMatch(result, m.p1Idx, m).map(label),
+        pair2: slotsForMatch(result, m.p2Idx, m).map(label),
+        g1: r.g1,
+        g2: r.g2,
+        winnerIdx: r.winnerIdx,
+        isTieBreak: r.isTieBreak,
+      };
+    })
+    .filter(Boolean);
+
+  // Mismos cálculos que la tabla, pero con esta única fecha.
+  const rows = computeStandings({ ...league, results: [result] }, groupId)
+    .filter((r) => r.pj > 0)
+    .sort((a, b) => b.points - a.points || b.pg - a.pg || a.name.localeCompare(b.name));
+
+  const date = group.fechas.find((f) => f.num === fechaNum)?.date || '';
+  return { group, fechaNum, date, matches, rows, complete: matches.length === MATCHES_PER_FECHA };
+}
+
+/* -------------------------------------------------------------------------
    Texto para compartir
    ------------------------------------------------------------------------- */
 

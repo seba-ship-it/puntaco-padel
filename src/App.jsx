@@ -11,6 +11,7 @@ import {
   countPlayed,
   emptySlot,
   buildPlayerProfile,
+  buildFechaSummary,
   formatStandingsForShare,
   resolveMatch,
 } from './lib/scoring.js';
@@ -28,7 +29,7 @@ import {
 import { closeSeason, applyRepechaje, seasonProgress } from './lib/season.js';
 import { CLOUD_CONFIGURED } from './lib/firebaseClient.js';
 import { useAuth } from './lib/auth.js';
-import { downloadStandingsImage } from './lib/exportImage.js';
+import { downloadStandingsImage, downloadFechaImage, downloadSeasonImage } from './lib/exportImage.js';
 import { Toast, themeFor } from './components/ui.jsx';
 import AuthGate from './components/AuthGate.jsx';
 
@@ -533,9 +534,32 @@ export default function App() {
 
   const handleShareImage = async () => {
     try {
-      const subtitle = `Acumulado de ${fechasJugadas} fecha${fechasJugadas === 1 ? '' : 's'}`;
+      const subtitle = `Temporada ${league.seasonNumber} · acumulado de ${fechasJugadas} fecha${fechasJugadas === 1 ? '' : 's'}`;
       await downloadStandingsImage(standings, group, subtitle, league.scoring);
       showToast('Imagen descargada.');
+    } catch {
+      showToast('No se pudo generar la imagen.', 'error');
+    }
+  };
+
+  const handleExportFecha = async (gId, fechaNum) => {
+    const summary = buildFechaSummary(league, gId, fechaNum);
+    if (!summary) {
+      showToast('Esa fecha todavía no tiene resultados cargados.', 'error');
+      return;
+    }
+    try {
+      await downloadFechaImage(summary, league.scoring);
+      showToast(`Resumen de la fecha ${fechaNum} descargado.`);
+    } catch {
+      showToast('No se pudo generar la imagen.', 'error');
+    }
+  };
+
+  const handleExportSeason = async (season, gId) => {
+    try {
+      await downloadSeasonImage(season, gId);
+      showToast(`Tabla de la temporada ${season.number} descargada.`);
     } catch {
       showToast('No se pudo generar la imagen.', 'error');
     }
@@ -673,6 +697,7 @@ export default function App() {
             scoring={league.scoring}
             canEdit={canEdit && !loadError}
             onOpenFecha={requireAuth(openFecha)}
+            onExportFecha={handleExportFecha}
             onDeleteFecha={requireAuth(handleDeleteResults)}
           />
         )}
@@ -683,6 +708,7 @@ export default function App() {
             canEdit={canEdit && !loadError}
             onCloseSeason={requireAuth(handleCloseSeason)}
             onApplyRepechaje={requireAuth(handleApplyRepechaje)}
+            onExportSeason={handleExportSeason}
           />
         )}
 
