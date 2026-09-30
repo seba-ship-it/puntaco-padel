@@ -195,6 +195,7 @@ function SeasonCard({ season, repechaje }) {
       <div className="text-xs text-slate-400 space-y-0.5">
         <p><ArrowUp className="w-3 h-3 inline text-emerald-400 mr-1" />Ascendieron: {season.promoted?.map((p) => p.name).join(' y ')}</p>
         <p><ArrowDown className="w-3 h-3 inline text-rose-400 mr-1" />Descendieron: {season.relegated?.map((p) => p.name).join(' y ')}</p>
+        {season.notes && <p className="text-[11px] text-slate-500 pl-4">{season.notes}</p>}
         {season.repechaje && (
           <p>
             <Shield className="w-3 h-3 inline text-amber-400 mr-1" />

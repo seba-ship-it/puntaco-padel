@@ -20,7 +20,13 @@ export function slug(text) {
 export const ROLES = ['Drive', 'Revés'];
 
 /** Reglamento de puntuación. Editable desde la pantalla "Liga". */
-export const SCORING_RULES_VERSION = 3; // Reglamento Puntako Pádel 2026
+export const SCORING_RULES_VERSION = 3;
+
+/**
+ * Revisión de los datos de arranque (jugadores, historial, repechaje). Una liga guardada
+ * con otra revisión y SIN ningún partido cargado se reemplaza por la semilla actual.
+ */
+export const SEED_REV = 2; // Reglamento Puntako Pádel 2026
 
 export const DEFAULT_SCORING = {
   victoria: 10,
@@ -48,16 +54,19 @@ export const DEFAULT_FEES = {
 };
 
 /**
- * Grupos de la temporada 2, ya con los ascensos y descensos directos de la
- * temporada 1 aplicados (Gusta y Alejo suben al A; Juanba y Joshua bajan al B).
+ * Grupos de la temporada 2, con los movimientos de la temporada 1 aplicados:
+ * Gusta y Alejo suben al A y Joshua baja al B. Juanba Bettini iba a bajar, pero
+ * pasa a jugar el repechaje en lugar de José Ferreira (que se ausenta un tiempo),
+ * así que se queda en el A y en el B queda un cupo de Drive libre.
+ * "Vacante" es un lugar reservado: se renombra desde Liga → Jugadores.
  */
 const PLAYERS_A = [
-  ['Tito Servián', 'Drive'], ['Luis Campos', 'Drive'], ['Sebas Nuñez', 'Drive'], ['José Ferreira da C.', 'Drive'], ['Gusta Riego', 'Drive'],
+  ['Tito Servián', 'Drive'], ['Luis Campos', 'Drive'], ['Sebas Nuñez', 'Drive'], ['Juanba Bettini', 'Drive'], ['Gusta Riego', 'Drive'],
   ['Pedro Faría', 'Revés'], ['Mauri Melgarejo', 'Revés'], ['Benja Bobadilla', 'Revés'], ['Willy Medina', 'Revés'], ['Alejo Medina', 'Revés'],
 ];
 
 const PLAYERS_B = [
-  ['Juanba Bettini', 'Drive'], ['Ale Rivas', 'Drive'], ['Alex Ivan Alfonso', 'Drive'], ['José Franco', 'Drive'], ['Rodrigo H.', 'Drive'],
+  ['Ale Rivas', 'Drive'], ['Alex Ivan Alfonso', 'Drive'], ['José Franco', 'Drive'], ['Rodrigo H.', 'Drive'], ['Vacante (Drive B)', 'Drive'],
   ['Joshua Rodgers', 'Revés'], ['Jordan Narváez', 'Revés'], ['Juan Carlos Bettini', 'Revés'], ['Josué Barreto', 'Revés'], ['Pablito García', 'Revés'],
 ];
 
@@ -119,9 +128,11 @@ function buildSeason1() {
       B: { Drive: ref(at('B', 'Drive', 0), 'Drive'), 'Revés': ref(at('B', 'Revés', 0), 'Revés') },
     },
     promoted: [ref(at('B', 'Drive', 0), 'Drive'), ref(at('B', 'Revés', 0), 'Revés')],
-    relegated: [ref(at('A', 'Drive', 4), 'Drive'), ref(at('A', 'Revés', 4), 'Revés')],
+    // Juanba (último del A en Drive) iba a bajar, pero juega el repechaje en lugar de José Ferreira.
+    relegated: [ref(at('A', 'Revés', 4), 'Revés')],
+    notes: 'Juanba Bettini iba a descender directo, pero juega el repechaje en lugar de José Ferreira, que se ausenta por un tiempo. El cupo de Drive que queda libre en el Grupo B se cubre con un jugador nuevo.',
     repechaje: {
-      a: { drive: ref(at('A', 'Drive', 3), 'Drive'), reves: ref(at('A', 'Revés', 3), 'Revés') },
+      a: { drive: ref(at('A', 'Drive', 4), 'Drive'), reves: ref(at('A', 'Revés', 3), 'Revés') },
       b: { drive: ref(at('B', 'Drive', 1), 'Drive'), reves: ref(at('B', 'Revés', 1), 'Revés') },
     },
     fines60: {},
@@ -185,6 +196,7 @@ export function buildDefaultLeague() {
   return {
     version: 4,
     scoringRules: SCORING_RULES_VERSION,
+    seedRev: SEED_REV,
     scoring: { ...DEFAULT_SCORING },
     /** Temporada en curso (5 fechas). Al cerrarla pasa al historial. */
     seasonNumber: 2, // la temporada 1 (24-ago a 21-sept) ya se jugó: va al historial
@@ -193,7 +205,7 @@ export function buildDefaultLeague() {
     repechaje: {
       fromSeason: 1,
       forSeason: 2,
-      a: { driveId: slug('José Ferreira da C.'), revesId: slug('Willy Medina') },
+      a: { driveId: slug('Juanba Bettini'), revesId: slug('Willy Medina') },
       b: { driveId: slug('Ale Rivas'), revesId: slug('Jordan Narváez') },
       scoreA: '',
       scoreB: '',

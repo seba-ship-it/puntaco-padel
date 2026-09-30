@@ -15,7 +15,7 @@
 import { doc, getDoc, onSnapshot, serverTimestamp, setDoc } from 'firebase/firestore';
 import {
   buildDefaultLeague, buildCalendar, slug,
-  DEFAULT_FEES, FIRST_SEASON_DATES, SCORING_RULES_VERSION,
+  DEFAULT_FEES, FIRST_SEASON_DATES, SCORING_RULES_VERSION, SEED_REV,
 } from '../data/defaults.js';
 import { db, CLOUD_CONFIGURED } from './firebaseClient.js';
 
@@ -166,12 +166,16 @@ function migrateFromV2(old) {
  */
 function normalize(league) {
   const base = buildDefaultLeague();
+  // Liga que quedó guardada con datos de arranque viejos y todavía sin partidos: se usa la semilla actual.
+  const untouched = !(league.results?.length) && !(league.history?.length);
+  if (untouched && league.seedRev !== SEED_REV && (league.version || 3) >= 4) return base;
   const isOld = (league.version || 3) < 4;
   const rulesOutdated = league.scoringRules !== SCORING_RULES_VERSION;
   const groups = Array.isArray(league.groups) && league.groups.length ? league.groups : base.groups;
 
   return {
     version: 4,
+    seedRev: league.seedRev ?? SEED_REV,
     scoringRules: SCORING_RULES_VERSION,
     scoring: rulesOutdated ? { ...base.scoring } : { ...base.scoring, ...(league.scoring || {}) },
     seasonNumber: Number.isInteger(league.seasonNumber) && league.seasonNumber > 0 ? league.seasonNumber : base.seasonNumber,

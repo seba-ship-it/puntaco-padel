@@ -1,0 +1,86 @@
+[debug] [2026-09-30T14:22:37.467Z] ----------------------------------------------------------------------
+[debug] [2026-09-30T14:22:37.468Z] Command:       /Users/sebastian/.local/node/bin/node /private/tmp/claude-501/-Users-sebastian-Documents-Claude---Proyectos-Puntako/eaa68a8c-3a3d-446b-93da-84ab9ce6287b/scratchpad/node_modules/.bin/firebase projects:list
+[debug] [2026-09-30T14:22:37.469Z] CLI Version:   15.32.0
+[debug] [2026-09-30T14:22:37.469Z] Platform:      darwin
+[debug] [2026-09-30T14:22:37.469Z] Node Version:  v24.18.0
+[debug] [2026-09-30T14:22:37.469Z] Detected Agent: claude-code_2-1-284_agent
+[debug] [2026-09-30T14:22:37.469Z] Time:          Wed Sep 30 2026 11:22:37 GMT-0300 (Paraguay Standard Time)
+[debug] [2026-09-30T14:22:37.469Z] ----------------------------------------------------------------------
+[debug] 
+[debug] [2026-09-30T14:22:37.478Z] >>> [apiv2][query] GET https://firebase-public.firebaseio.com/cli.json [none]
+[debug] [2026-09-30T14:22:37.564Z] > command requires scopes: ["email","openid","https://www.googleapis.com/auth/cloudplatformprojects.readonly","https://www.googleapis.com/auth/firebase","https://www.googleapis.com/auth/cloud-platform"]
+[debug] [2026-09-30T14:22:37.564Z] > authorizing via signed-in user (seba@agenciazeta.com)
+[debug] [2026-09-30T14:22:37.565Z] Checked if tokens are valid: false, expires at: 1790697547959
+[debug] [2026-09-30T14:22:37.565Z] Checked if tokens are valid: false, expires at: 1790697547959
+[debug] [2026-09-30T14:22:37.565Z] > refreshing access token with scopes: []
+[debug] [2026-09-30T14:22:37.566Z] >>> [apiv2][query] POST https://www.googleapis.com/oauth2/v3/token [none]
+[debug] [2026-09-30T14:22:37.566Z] >>> [apiv2][body] POST https://www.googleapis.com/oauth2/v3/token [omitted]
+[debug] [2026-09-30T14:22:37.873Z] <<< [apiv2][status] POST https://www.googleapis.com/oauth2/v3/token 400
+[debug] [2026-09-30T14:22:37.873Z] <<< [apiv2][body] POST https://www.googleapis.com/oauth2/v3/token [omitted]
+[error] Authentication Error: Your credentials are no longer valid. Please run firebase login --reauth
+
+For CI servers and headless environments, generate a new token with firebase login:ci
+[error] Authentication Error: Your credentials are no longer valid. Please run firebase login --reauth
+
+For CI servers and headless environments, generate a new token with firebase login:ci
+[debug] [2026-09-30T14:22:37.873Z] Authentication Error: Your credentials are no longer valid. Please run firebase login --reauth
+
+For CI servers and headless environments, generate a new token with firebase login:ci
+[debug] [2026-09-30T14:22:38.056Z] FirebaseError: Authentication Error: Your credentials are no longer valid. Please run firebase login --reauth
+
+For CI servers and headless environments, generate a new token with firebase login:ci
+    at invalidCredentialError (/private/tmp/claude-501/-Users-sebastian-Documents-Claude---Proyectos-Puntako/eaa68a8c-3a3d-446b-93da-84ab9ce6287b/scratchpad/node_modules/firebase-tools/lib/auth.js:178:12)
+    at refreshTokens (/private/tmp/claude-501/-Users-sebastian-Documents-Claude---Proyectos-Puntako/eaa68a8c-3a3d-446b-93da-84ab9ce6287b/scratchpad/node_modules/firebase-tools/lib/auth.js:607:15)
+    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+    at async getAccessToken (/private/tmp/claude-501/-Users-sebastian-Documents-Claude---Proyectos-Puntako/eaa68a8c-3a3d-446b-93da-84ab9ce6287b/scratchpad/node_modules/firebase-tools/lib/apiv2.js:53:18)
+    at async Client.addAuthHeader (/private/tmp/claude-501/-Users-sebastian-Documents-Claude---Proyectos-Puntako/eaa68a8c-3a3d-446b-93da-84ab9ce6287b/scratchpad/node_modules/firebase-tools/lib/apiv2.js:209:21)
+    at async Client.request (/private/tmp/claude-501/-Users-sebastian-Documents-Claude---Proyectos-Puntako/eaa68a8c-3a3d-446b-93da-84ab9ce6287b/scratchpad/node_modules/firebase-tools/lib/apiv2.js:156:34)
+    at async getProjectPage (/private/tmp/claude-501/-Users-sebastian-Documents-Claude---Proyectos-Puntako/eaa68a8c-3a3d-446b-93da-84ab9ce6287b/scratchpad/node_modules/firebase-tools/lib/management/projects.js:301:17)
+    at async getFirebaseProjectPage (/private/tmp/claude-501/-Users-sebastian-Documents-Claude---Proyectos-Puntako/eaa68a8c-3a3d-446b-93da-84ab9ce6287b/scratchpad/node_modules/firebase-tools/lib/management/projects.js:318:23)
+    at async listFirebaseProjects (/private/tmp/claude-501/-Users-sebastian-Documents-Claude---Proyectos-Puntako/eaa68a8c-3a3d-446b-93da-84ab9ce6287b/scratchpad/node_modules/firebase-tools/lib/management/projects.js:347:29)
+    at async Command.actionFn (/private/tmp/claude-501/-Users-sebastian-Documents-Claude---Proyectos-Puntako/eaa68a8c-3a3d-446b-93da-84ab9ce6287b/scratchpad/node_modules/firebase-tools/lib/commands/projects-list.js:51:20)
+[error] 
+[error] Error: Failed to list Firebase projects. See firebase-debug.log for more info.
+[debug] [2026-09-30T14:22:38.098Z] <<< [apiv2][status] GET https://firebase-public.firebaseio.com/cli.json 200
+[debug] [2026-09-30T14:22:38.098Z] <<< [apiv2][body] GET https://firebase-public.firebaseio.com/cli.json {"cloudBuildErrorAfter":1594252800000,"cloudBuildWarnAfter":1590019200000,"defaultNode10After":1594252800000,"minVersion":"3.0.5","node8DeploysDisabledAfter":1613390400000,"node8RuntimeDisabledAfter":1615809600000,"node8WarnAfter":1600128000000}
+[debug] [2026-09-30T14:22:45.061Z] ----------------------------------------------------------------------
+[debug] [2026-09-30T14:22:45.062Z] Command:       /Users/sebastian/.local/node/bin/node /private/tmp/claude-501/-Users-sebastian-Documents-Claude---Proyectos-Puntako/eaa68a8c-3a3d-446b-93da-84ab9ce6287b/scratchpad/node_modules/.bin/firebase apps:list --project puntako-padel-liga
+[debug] [2026-09-30T14:22:45.062Z] CLI Version:   15.32.0
+[debug] [2026-09-30T14:22:45.062Z] Platform:      darwin
+[debug] [2026-09-30T14:22:45.062Z] Node Version:  v24.18.0
+[debug] [2026-09-30T14:22:45.062Z] Detected Agent: claude-code_2-1-284_agent
+[debug] [2026-09-30T14:22:45.063Z] Time:          Wed Sep 30 2026 11:22:45 GMT-0300 (Paraguay Standard Time)
+[debug] [2026-09-30T14:22:45.063Z] ----------------------------------------------------------------------
+[debug] 
+[debug] [2026-09-30T14:22:45.160Z] > command requires scopes: ["email","openid","https://www.googleapis.com/auth/cloudplatformprojects.readonly","https://www.googleapis.com/auth/firebase","https://www.googleapis.com/auth/cloud-platform"]
+[debug] [2026-09-30T14:22:45.160Z] > authorizing via signed-in user (seba@agenciazeta.com)
+[debug] [2026-09-30T14:22:45.166Z] Checked if tokens are valid: false, expires at: 1790697547959
+[debug] [2026-09-30T14:22:45.166Z] Checked if tokens are valid: false, expires at: 1790697547959
+[debug] [2026-09-30T14:22:45.166Z] > refreshing access token with scopes: []
+[debug] [2026-09-30T14:22:45.167Z] >>> [apiv2][query] POST https://www.googleapis.com/oauth2/v3/token [none]
+[debug] [2026-09-30T14:22:45.167Z] >>> [apiv2][body] POST https://www.googleapis.com/oauth2/v3/token [omitted]
+[debug] [2026-09-30T14:22:45.360Z] <<< [apiv2][status] POST https://www.googleapis.com/oauth2/v3/token 400
+[debug] [2026-09-30T14:22:45.360Z] <<< [apiv2][body] POST https://www.googleapis.com/oauth2/v3/token [omitted]
+[error] Authentication Error: Your credentials are no longer valid. Please run firebase login --reauth
+
+For CI servers and headless environments, generate a new token with firebase login:ci
+[error] Authentication Error: Your credentials are no longer valid. Please run firebase login --reauth
+
+For CI servers and headless environments, generate a new token with firebase login:ci
+[debug] [2026-09-30T14:22:45.361Z] Authentication Error: Your credentials are no longer valid. Please run firebase login --reauth
+
+For CI servers and headless environments, generate a new token with firebase login:ci
+[debug] [2026-09-30T14:22:45.509Z] FirebaseError: Authentication Error: Your credentials are no longer valid. Please run firebase login --reauth
+
+For CI servers and headless environments, generate a new token with firebase login:ci
+    at invalidCredentialError (/private/tmp/claude-501/-Users-sebastian-Documents-Claude---Proyectos-Puntako/eaa68a8c-3a3d-446b-93da-84ab9ce6287b/scratchpad/node_modules/firebase-tools/lib/auth.js:178:12)
+    at refreshTokens (/private/tmp/claude-501/-Users-sebastian-Documents-Claude---Proyectos-Puntako/eaa68a8c-3a3d-446b-93da-84ab9ce6287b/scratchpad/node_modules/firebase-tools/lib/auth.js:607:15)
+    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+    at async getAccessToken (/private/tmp/claude-501/-Users-sebastian-Documents-Claude---Proyectos-Puntako/eaa68a8c-3a3d-446b-93da-84ab9ce6287b/scratchpad/node_modules/firebase-tools/lib/apiv2.js:53:18)
+    at async Client.addAuthHeader (/private/tmp/claude-501/-Users-sebastian-Documents-Claude---Proyectos-Puntako/eaa68a8c-3a3d-446b-93da-84ab9ce6287b/scratchpad/node_modules/firebase-tools/lib/apiv2.js:209:21)
+    at async Client.request (/private/tmp/claude-501/-Users-sebastian-Documents-Claude---Proyectos-Puntako/eaa68a8c-3a3d-446b-93da-84ab9ce6287b/scratchpad/node_modules/firebase-tools/lib/apiv2.js:156:34)
+    at async listFirebaseApps (/private/tmp/claude-501/-Users-sebastian-Documents-Claude---Proyectos-Puntako/eaa68a8c-3a3d-446b-93da-84ab9ce6287b/scratchpad/node_modules/firebase-tools/lib/management/apps.js:376:30)
+    at async Command.actionFn (/private/tmp/claude-501/-Users-sebastian-Documents-Claude---Proyectos-Puntako/eaa68a8c-3a3d-446b-93da-84ab9ce6287b/scratchpad/node_modules/firebase-tools/lib/commands/apps-list.js:43:16)
+    at async /private/tmp/claude-501/-Users-sebastian-Documents-Claude---Proyectos-Puntako/eaa68a8c-3a3d-446b-93da-84ab9ce6287b/scratchpad/node_modules/firebase-tools/lib/command.js:280:28
+[error] 
+[error] Error: Failed to list Firebase apps. See firebase-debug.log for more info.
