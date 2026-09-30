@@ -214,12 +214,17 @@ function SeasonCard({ season, repechaje }) {
           {season.groups.map((g) => (
             <div key={g.id} className="rounded-lg bg-slate-950 border border-slate-800 p-3">
               <p className={`text-xs font-black mb-2 ${themeFor(g.id).text}`}>{g.name}</p>
-              {(season.standings?.[g.id] || []).map((r, i) => (
-                <div key={r.playerId} className="flex justify-between text-xs py-0.5">
-                  <span className="text-slate-300">
-                    {i + 1}. {r.name} <span className={`text-[10px] ${ROLE_STYLE[r.role] || ''}`}>{r.role}</span>
-                  </span>
-                  <span className="font-bold text-white tabular-nums">{r.points}</span>
+              {['Drive', 'Revés'].map((role) => (
+                <div key={role} className="mb-2 last:mb-0">
+                  <p className={`text-[10px] font-bold uppercase ${ROLE_STYLE[role]}`}>{role}</p>
+                  {(season.standings?.[g.id] || [])
+                    .filter((r) => r.role === role)
+                    .map((r, i) => (
+                      <div key={r.playerId} className="flex justify-between text-xs py-0.5">
+                        <span className="text-slate-300">{i + 1}. {r.name}</span>
+                        <span className="font-bold text-white tabular-nums">{r.points}</span>
+                      </div>
+                    ))}
                 </div>
               ))}
             </div>

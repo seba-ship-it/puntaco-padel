@@ -47,15 +47,87 @@ export const DEFAULT_FEES = {
   dobleFalta: 5000,
 };
 
+/**
+ * Grupos de la temporada 2, ya con los ascensos y descensos directos de la
+ * temporada 1 aplicados (Gusta y Alejo suben al A; Juanba y Joshua bajan al B).
+ */
 const PLAYERS_A = [
-  ['Tito', 'Drive'], ['Josexo', 'Drive'], ['LC', 'Drive'], ['Juanba', 'Drive'], ['Diego', 'Drive'],
-  ['Faría', 'Revés'], ['Willy', 'Revés'], ['Joshua', 'Revés'], ['Mauri', 'Revés'], ['Benja', 'Revés'],
+  ['Tito Servián', 'Drive'], ['Luis Campos', 'Drive'], ['Sebas Nuñez', 'Drive'], ['José Ferreira da C.', 'Drive'], ['Gusta Riego', 'Drive'],
+  ['Pedro Faría', 'Revés'], ['Mauri Melgarejo', 'Revés'], ['Benja Bobadilla', 'Revés'], ['Willy Medina', 'Revés'], ['Alejo Medina', 'Revés'],
 ];
 
 const PLAYERS_B = [
-  ['Sebas', 'Drive'], ['Ale', 'Drive'], ['Gusta', 'Drive'], ['Vinchi', 'Drive'], ['José F', 'Drive'],
-  ['Josué', 'Revés'], ['Jordan', 'Revés'], ['Fideo', 'Revés'], ['Alejo', 'Revés'], ['Juanki', 'Revés'],
+  ['Juanba Bettini', 'Drive'], ['Ale Rivas', 'Drive'], ['Alex Ivan Alfonso', 'Drive'], ['José Franco', 'Drive'], ['Rodrigo H.', 'Drive'],
+  ['Joshua Rodgers', 'Revés'], ['Jordan Narváez', 'Revés'], ['Juan Carlos Bettini', 'Revés'], ['Josué Barreto', 'Revés'], ['Pablito García', 'Revés'],
 ];
+
+/**
+ * Tabla final de la temporada 1 (24-ago a 21-sept), tal como quedó publicada:
+ * [nombre, fechasJugadas, PJ, PG, puntos, gamesAFavor, gamesEnContra].
+ * Está en el orden de la tabla, por puesto.
+ */
+const SEASON1 = {
+  A: {
+    Drive: [
+      ['Tito Servián', 5, 20, 16, 181, 107, 67], ['Luis Campos', 5, 20, 14, 148, 110, 86],
+      ['Sebas Nuñez', 5, 20, 11, 92, 82, 89], ['José Ferreira da C.', 5, 20, 8, 88, 92, 100],
+      ['Juanba Bettini', 3, 12, 2, 20, 40, 68],
+    ],
+    Revés: [
+      ['Pedro Faría', 5, 20, 15, 159, 108, 76], ['Mauri Melgarejo', 5, 20, 12, 126, 99, 89],
+      ['Benja Bobadilla', 4, 16, 8, 89, 74, 71], ['Willy Medina', 5, 20, 8, 87, 84, 102],
+      ['Joshua Rodgers', 5, 20, 7, 77, 90, 105],
+    ],
+  },
+  B: {
+    Drive: [
+      ['Gusta Riego', 4, 16, 11, 114, 80, 65], ['Ale Rivas', 4, 16, 10, 111, 81, 57],
+      ['Alex Ivan Alfonso', 4, 16, 6, 60, 61, 70], ['José Franco', 2, 8, 2, 20, 32, 43],
+      ['Rodrigo H.', 0, 0, 0, 0, 0, 0],
+    ],
+    Revés: [
+      ['Alejo Medina', 5, 20, 13, 139, 97, 80], ['Jordan Narváez', 5, 20, 10, 106, 87, 83],
+      ['Juan Carlos Bettini', 5, 20, 9, 92, 87, 91], ['Josué Barreto', 3, 12, 8, 80, 60, 54],
+      ['Pablito García', 2, 8, 5, 56, 35, 30],
+    ],
+  },
+};
+
+function buildSeason1() {
+  const ref = (name, role) => ({ playerId: slug(name), name, role });
+  const rows = (groupId) =>
+    ['Drive', 'Revés'].flatMap((role) =>
+      SEASON1[groupId][role].map(([name, fechas, pj, pg, points, gw, gl]) => ({
+        playerId: slug(name), name, role, points, pj, pg, gamesWon: gw, gamesLost: gl, fechasJugadas: fechas,
+      })),
+    );
+  const at = (groupId, role, i) => SEASON1[groupId][role][i][0];
+  const players = (groupId) =>
+    ['Drive', 'Revés'].flatMap((role) => SEASON1[groupId][role].map(([n]) => ({ id: slug(n), name: n, role })));
+  // Movimientos por puesto: 1º de B sube, último de A baja; repechaje: penúltimo de A vs 2º de B.
+  return {
+    number: 1,
+    closedAt: '2026-09-22T00:00:00.000Z',
+    dates: ['2026-08-24', '2026-08-31', '2026-09-07', '2026-09-14', '2026-09-21'],
+    groups: [
+      { id: 'A', name: 'Grupo A', players: players('A') },
+      { id: 'B', name: 'Grupo B', players: players('B') },
+    ],
+    standings: { A: rows('A'), B: rows('B') },
+    champions: {
+      A: { Drive: ref(at('A', 'Drive', 0), 'Drive'), 'Revés': ref(at('A', 'Revés', 0), 'Revés') },
+      B: { Drive: ref(at('B', 'Drive', 0), 'Drive'), 'Revés': ref(at('B', 'Revés', 0), 'Revés') },
+    },
+    promoted: [ref(at('B', 'Drive', 0), 'Drive'), ref(at('B', 'Revés', 0), 'Revés')],
+    relegated: [ref(at('A', 'Drive', 4), 'Drive'), ref(at('A', 'Revés', 4), 'Revés')],
+    repechaje: {
+      a: { drive: ref(at('A', 'Drive', 3), 'Drive'), reves: ref(at('A', 'Revés', 3), 'Revés') },
+      b: { drive: ref(at('B', 'Drive', 1), 'Drive'), reves: ref(at('B', 'Revés', 1), 'Revés') },
+    },
+    fines60: {},
+    results: [],
+  };
+}
 
 /**
  * Lunes de la temporada en curso (editables desde Liga → Calendario).
@@ -116,9 +188,18 @@ export function buildDefaultLeague() {
     scoring: { ...DEFAULT_SCORING },
     /** Temporada en curso (5 fechas). Al cerrarla pasa al historial. */
     seasonNumber: 2, // la temporada 1 (24-ago a 21-sept) ya se jugó: va al historial
-    history: [],
-    /** Partido de repechaje pendiente/jugado (fecha 1 de la temporada siguiente). */
-    repechaje: null,
+    history: [buildSeason1()],
+    /** Repechaje pendiente/jugado (Fecha 1 de la temporada 2): penúltimo del A vs 2º del B. */
+    repechaje: {
+      fromSeason: 1,
+      forSeason: 2,
+      a: { driveId: slug('José Ferreira da C.'), revesId: slug('Willy Medina') },
+      b: { driveId: slug('Ale Rivas'), revesId: slug('Jordan Narváez') },
+      scoreA: '',
+      scoreB: '',
+      winner: null,
+      done: false,
+    },
     groups: [
       buildGroup('A', 'Grupo A', PLAYERS_A, FIRST_SEASON_DATES),
       buildGroup('B', 'Grupo B', PLAYERS_B, FIRST_SEASON_DATES),
