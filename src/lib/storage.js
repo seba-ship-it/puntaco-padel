@@ -12,7 +12,9 @@
  * publica siempre tiene Firebase configurado vía GitHub Actions.
  */
 
-import { doc, getDoc, onSnapshot, serverTimestamp, setDoc } from 'firebase/firestore';
+import {
+  collection, deleteDoc, doc, getDoc, onSnapshot, serverTimestamp, setDoc, updateDoc,
+} from 'firebase/firestore';
 import {
   buildDefaultLeague, buildCalendar, slug,
   DEFAULT_FEES, FIRST_SEASON_DATES, SCORING_RULES_VERSION, SEED_REV,
@@ -118,6 +120,61 @@ export function subscribeToLeague(onChange) {
       /* sin permiso o sin conexión: la carga inicial ya muestra el aviso */
     },
   );
+}
+
+/* ------------------------------------------------------ jornadas abiertas */
+
+/**
+ * Jornada abierta: el admin genera un link secreto (el id del documento) que se
+ * comparte en el grupo de WhatsApp, y cada jugador carga ahí el marcador de su
+ * partido SIN clave. Las reglas (firestore.rules) solo dejan tocar el campo
+ * `matches` mientras la jornada está abierta; abrirla, cerrarla y listarlas es
+ * solo del admin. El admin revisa lo cargado y lo guarda como resultado oficial.
+ *
+ *   jornadas/{token} = { groupId, fechaNum, status: 'open'|'closed',
+ *                        matches: { [matchId]: { p1Games, p2Games, by } } }
+ */
+const newToken = () =>
+  Array.from(crypto.getRandomValues(new Uint8Array(15)), (b) => (b % 36).toString(36)).join('');
+
+export async function openJornada(groupId, fechaNum) {
+  const token = newToken();
+  await setDoc(doc(db, 'jornadas', token), {
+    groupId, fechaNum, status: 'open', matches: {}, createdAt: serverTimestamp(), updatedAt: serverTimestamp(),
+  });
+  return token;
+}
+
+export const closeJornada = (token) =>
+  updateDoc(doc(db, 'jornadas', token), { status: 'closed', updatedAt: serverTimestamp() });
+
+export const deleteJornada = (token) => deleteDoc(doc(db, 'jornadas', token));
+
+/** Todas las jornadas (solo el admin puede listarlas). */
+export function subscribeToJornadas(onChange) {
+  if (!CLOUD_CONFIGURED) return () => {};
+  return onSnapshot(
+    collection(db, 'jornadas'),
+    (snap) => onChange(snap.docs.map((d) => ({ token: d.id, ...d.data() }))),
+    () => onChange([]),
+  );
+}
+
+/** Una jornada por su link (lo usan los jugadores, sin clave). */
+export function subscribeToJornada(token, onChange, onError) {
+  return onSnapshot(
+    doc(db, 'jornadas', token),
+    (snap) => onChange(snap.exists() ? { token, ...snap.data() } : null),
+    onError,
+  );
+}
+
+/** Un jugador carga (o corrige) el marcador de un partido. */
+export function submitJornadaMatch(token, matchId, p1Games, p2Games, by) {
+  return updateDoc(doc(db, 'jornadas', token), {
+    [`matches.${matchId}`]: { p1Games, p2Games, by: by || '' },
+    updatedAt: serverTimestamp(),
+  });
 }
 
 /* ------------------------------------------------------------- migración */

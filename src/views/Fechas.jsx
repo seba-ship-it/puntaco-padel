@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Check, Trash2, Lock, ImageDown } from 'lucide-react';
+import { Check, Trash2, Lock, ImageDown, Link2, MessageCircle, Radio } from 'lucide-react';
 import { ProgressBar, RulesPanel, SectionTitle, PAIR_COLORS, themeFor } from '../components/ui.jsx';
 import { formatDate } from '../data/defaults.js';
 import { MATCHES_PER_FECHA, countPlayed } from '../lib/scoring.js';
@@ -16,6 +16,13 @@ export default function Fechas({
   canEdit = true,
   onOpenFecha,
   onExportFecha,
+  jornadas = [],
+  cloud = false,
+  onOpenJornada,
+  onCopyJornada,
+  onWhatsappJornada,
+  onReviewJornada,
+  onCancelJornada,
   onDeleteFecha,
 }) {
   const [rulesOpen, setRulesOpen] = useState(false);
@@ -40,6 +47,10 @@ export default function Fechas({
           const saved = league.results.find((r) => r.groupId === group.id && r.fechaNum === fecha.num);
           const played = saved ? countPlayed(saved.matches) : 0;
           const hasDraft = Boolean(drafts[`${group.id}-${fecha.num}`]);
+          const open = jornadas.find((j) => j.status === 'open' && j.groupId === group.id && j.fechaNum === fecha.num);
+          const submitted = open
+            ? Object.values(open.matches || {}).filter((m) => m.p1Games !== '' && m.p2Games !== '').length
+            : 0;
 
           return (
             <div key={fecha.num} className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden flex flex-col">
@@ -72,6 +83,40 @@ export default function Fechas({
               {played > 0 && (
                 <div className="px-3 pb-2">
                   <ProgressBar done={played} total={MATCHES_PER_FECHA} accent={theme.bg} />
+                </div>
+              )}
+
+              {open && canEdit && (
+                <div className="mx-3 mb-3 rounded-lg border border-emerald-500/30 bg-emerald-500/5 p-3 space-y-2">
+                  <p className="text-xs font-bold text-emerald-300 flex items-center gap-1.5">
+                    <Radio className="w-3.5 h-3.5" />
+                    Jornada abierta · {submitted} de {MATCHES_PER_FECHA} partidos cargados por los jugadores
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    <button onClick={() => onCopyJornada(open.token)} className="px-2.5 py-1.5 rounded-lg text-[11px] font-bold flex items-center gap-1.5 bg-slate-800 text-slate-200 hover:bg-slate-700">
+                      <Link2 className="w-3.5 h-3.5" /> Copiar link
+                    </button>
+                    <button onClick={() => onWhatsappJornada(open.token, group.id, fecha.num)} className="px-2.5 py-1.5 rounded-lg text-[11px] font-bold flex items-center gap-1.5 bg-slate-800 text-slate-200 hover:bg-slate-700">
+                      <MessageCircle className="w-3.5 h-3.5" /> WhatsApp
+                    </button>
+                    <button onClick={() => onReviewJornada(open.token)} className={`px-2.5 py-1.5 rounded-lg text-[11px] font-bold text-slate-950 ${theme.bg} hover:opacity-90`}>
+                      Revisar y cerrar
+                    </button>
+                    <button onClick={() => onCancelJornada(open.token)} className="px-2.5 py-1.5 rounded-lg text-[11px] font-bold text-slate-500 hover:text-rose-400">
+                      Cancelar
+                    </button>
+                  </div>
+                </div>
+              )}
+              {!open && canEdit && cloud && (
+                <div className="px-3 pb-3">
+                  <button
+                    onClick={() => onOpenJornada(group.id, fecha.num)}
+                    className="w-full py-2 rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 border border-dashed border-slate-700 text-slate-300 hover:border-emerald-500/50 hover:text-emerald-300 transition-colors"
+                  >
+                    <Radio className="w-3.5 h-3.5" />
+                    Abrir jornada (link para que carguen los jugadores)
+                  </button>
                 </div>
               )}
 

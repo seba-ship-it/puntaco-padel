@@ -17,5 +17,17 @@ service cloud.firestore {
     match /finance/{doc} {
       allow read, write: if esEncargado();
     }
+
+    // Jornada abierta: el link secreto es el id del documento. Quien lo tiene
+    // puede leerla y cargar marcadores (solo el campo `matches`) mientras esté
+    // abierta. Listarlas, abrirlas, cerrarlas y borrarlas es solo del encargado.
+    match /jornadas/{token} {
+      allow get: if true;
+      allow list, create, delete: if esEncargado();
+      allow update: if esEncargado()
+        || (resource.data.status == 'open'
+            && request.resource.data.status == 'open'
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['matches', 'updatedAt']));
+    }
   }
 }

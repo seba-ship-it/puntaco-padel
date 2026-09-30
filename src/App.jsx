@@ -25,6 +25,10 @@ import {
   loadFinance,
   saveFinance,
   emptyFinance,
+  openJornada,
+  closeJornada,
+  deleteJornada,
+  subscribeToJornadas,
 } from './lib/storage.js';
 import { closeSeason, applyRepechaje, seasonProgress } from './lib/season.js';
 import { CLOUD_CONFIGURED } from './lib/firebaseClient.js';
@@ -41,8 +45,13 @@ import LeagueAdmin from './views/LeagueAdmin.jsx';
 import Temporada from './views/Temporada.jsx';
 import Reglamento from './views/Reglamento.jsx';
 import Pagos from './views/Pagos.jsx';
+import JornadaPublica from './views/JornadaPublica.jsx';
 
 const DRAFTS_KEY = 'puntaco-drafts-v3';
+
+/** Link de una jornada abierta: https://…/#/jornada/<token> */
+const tokenFromHash = () => /^#\/jornada\/([a-z0-9]{10,})$/i.exec(window.location.hash)?.[1] || null;
+const jornadaLink = (token) => `${window.location.origin}${window.location.pathname}#/jornada/${token}`;
 
 export default function App() {
   // Arranca con una liga vacía válida (no null) para que todos los hooks de
@@ -69,6 +78,14 @@ export default function App() {
 
   const { canEdit, signIn, signOut, sendPasswordReset } = useAuth();
   const [finance, setFinance] = useState(null); // solo se carga con la clave
+  const [jornadaToken, setJornadaToken] = useState(tokenFromHash);
+  const [jornadas, setJornadas] = useState([]); // jornadas abiertas/cerradas (solo admin)
+
+  useEffect(() => {
+    const onHash = () => setJornadaToken(tokenFromHash());
+    window.addEventListener('hashchange', onHash);
+    return () => window.removeEventListener('hashchange', onHash);
+  }, []);
 
   const showToast = useCallback((msg, type = 'success') => setNotification({ msg, type }), []);
 
@@ -161,6 +178,15 @@ export default function App() {
       cancelled = true;
     };
   }, [canEdit, loadError, syncing, showToast]);
+
+  // Jornadas con link: solo el admin las puede listar.
+  useEffect(() => {
+    if (!canEdit || loadError || syncing || !CLOUD_CONFIGURED) {
+      setJornadas([]);
+      return undefined;
+    }
+    return subscribeToJornadas(setJornadas);
+  }, [canEdit, loadError, syncing]);
 
   const handleFinanceChange = (next) => {
     setFinance(next);
@@ -345,6 +371,11 @@ export default function App() {
       return next;
     });
 
+    // Si había una jornada abierta con link para esta fecha, se cierra con el guardado.
+    jornadas
+      .filter((j) => j.status === 'open' && j.groupId === gId && j.fechaNum === fechaNum)
+      .forEach((j) => closeJornada(j.token).catch(() => {}));
+
     setEditingKey(null);
     setView('standings');
     showToast(
@@ -364,6 +395,66 @@ export default function App() {
     setEditingKey(null);
     setView('fechas');
     showToast('Cambios descartados.');
+  };
+
+  /* ------------------------------------------------- jornada con link */
+
+  const handleOpenJornada = async (gId, fechaNum) => {
+    try {
+      const token = await openJornada(gId, fechaNum);
+      await copyLink(token, 'Jornada abierta. Link copiado: pegalo en el grupo de WhatsApp.');
+    } catch (err) {
+      showToast(err.message || 'No se pudo abrir la jornada.', 'error');
+    }
+  };
+
+  const copyLink = async (token, okMsg = 'Link copiado.') => {
+    try {
+      await navigator.clipboard.writeText(jornadaLink(token));
+      showToast(okMsg);
+    } catch {
+      window.prompt('Copiá este link:', jornadaLink(token));
+    }
+  };
+
+  const handleWhatsapp = (token, gId, fechaNum) => {
+    const g = league.groups.find((x) => x.id === gId);
+    const text = `🎾 Puntako Pádel · ${g?.name} · Fecha ${fechaNum}\nCargá el resultado de tu partido acá:\n${jornadaLink(token)}`;
+    window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank', 'noopener');
+  };
+
+  const handleCancelJornada = async (token) => {
+    if (!window.confirm('¿Cancelar la jornada abierta? El link deja de funcionar y se descarta lo que cargaron los jugadores.')) return;
+    try {
+      await deleteJornada(token);
+      showToast('Jornada cancelada.');
+    } catch (err) {
+      showToast(err.message || 'No se pudo cancelar.', 'error');
+    }
+  };
+
+  /** Pasa lo que cargaron los jugadores al editor de la fecha, para revisarlo y guardarlo. */
+  const handleReviewJornada = (token) => {
+    const j = jornadas.find((x) => x.token === token);
+    if (!j) return;
+    const key = `${j.groupId}-${j.fechaNum}`;
+    const targetGroup = league.groups.find((g) => g.id === j.groupId);
+    const saved = league.results.find((r) => r.groupId === j.groupId && r.fechaNum === j.fechaNum);
+    const base = saved
+      ? { pairs: saved.pairs, matches: saved.matches }
+      : buildFechaDraft(targetGroup, j.fechaNum);
+    const draft = {
+      ...base,
+      matches: base.matches.map((m) => {
+        const sub = j.matches?.[m.id];
+        return sub && sub.p1Games !== '' && sub.p2Games !== '' ? { ...m, p1Games: sub.p1Games, p2Games: sub.p2Games } : m;
+      }),
+    };
+    setDrafts((prev) => ({ ...prev, [key]: draft }));
+    setGroupId(j.groupId);
+    setEditingKey(key);
+    setView('load');
+    showToast('Revisá los marcadores (y los apoyos, si hubo) y tocá "Guardar fecha" para cerrar la jornada.');
   };
 
   const handleDeleteResults = (gId, fechaNum) => {
@@ -576,6 +667,30 @@ export default function App() {
     { id: 'admin', label: 'Liga', icon: Settings },
   ];
 
+  // Link de jornada: los jugadores ven solo la carga de marcadores, sin menú.
+  if (jornadaToken) {
+    return (
+      <div className="min-h-screen bg-slate-950 text-slate-100 font-sans">
+        <style>{`@keyframes pkFade { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } } .pk-fade { animation: pkFade .18s ease-out; }`}</style>
+        <header className="bg-slate-900 border-b border-slate-800">
+          <div className="max-w-xl mx-auto px-4 py-3 flex items-center gap-2.5">
+            <span className="text-lg">🎾</span>
+            <h1 className="text-base font-black text-white">Puntako Pádel</h1>
+          </div>
+        </header>
+        <main className="max-w-xl mx-auto px-4 py-5">
+          {syncing ? (
+            <p className="text-sm text-slate-500 text-center py-10">Cargando…</p>
+          ) : loadError ? (
+            <p className="text-sm text-rose-300 text-center py-10">No se pudo conectar con la base de datos. Probá de nuevo en un momento.</p>
+          ) : (
+            <JornadaPublica token={jornadaToken} league={league} />
+          )}
+        </main>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans">
       <style>{`
@@ -698,6 +813,13 @@ export default function App() {
             canEdit={canEdit && !loadError}
             onOpenFecha={requireAuth(openFecha)}
             onExportFecha={handleExportFecha}
+            jornadas={jornadas}
+            cloud={CLOUD_CONFIGURED}
+            onOpenJornada={requireAuth(handleOpenJornada)}
+            onCopyJornada={copyLink}
+            onWhatsappJornada={handleWhatsapp}
+            onReviewJornada={requireAuth(handleReviewJornada)}
+            onCancelJornada={requireAuth(handleCancelJornada)}
             onDeleteFecha={requireAuth(handleDeleteResults)}
           />
         )}
