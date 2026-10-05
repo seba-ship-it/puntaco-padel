@@ -30,7 +30,7 @@ import {
   deleteJornada,
   subscribeToJornadas,
 } from './lib/storage.js';
-import { closeSeason, applyRepechaje, seasonProgress } from './lib/season.js';
+import { closeSeason, applyRepechaje, seasonProgress, needsRepechajeFecha1, applyRepechajeDesdeFecha1 } from './lib/season.js';
 import { CLOUD_CONFIGURED } from './lib/firebaseClient.js';
 import { useAuth } from './lib/auth.js';
 import { downloadStandingsImage, downloadFechaImage, downloadSeasonImage } from './lib/exportImage.js';
@@ -62,6 +62,7 @@ export default function App() {
   const hydrated = useRef(false);
   const skipNextSave = useRef(false);
   const lastSaved = useRef(null); // para reconocer el eco de nuestro propio guardado
+  const reparacionPendiente = useRef(null); // corrección de datos aplicada y pendiente de guardar
 
   const [drafts, setDrafts] = useState(() => {
     try {
@@ -207,6 +208,27 @@ export default function App() {
       saveLeague(league).catch((err) => showToast(err.message || 'No se pudo guardar.', 'error'));
     }
   }, [league, showToast]);
+
+  // Corrección de datos (una sola vez): las ligas que quedaron con el repechaje
+  // aplicado desde la Fecha 2 se realinean a la Fecha 1 — el que ascendió juega
+  // la Fecha 1 en su grupo nuevo. No toca marcadores, apoyos ni historial.
+  useEffect(() => {
+    if (syncing || loadError) return;
+    if (!needsRepechajeFecha1(league)) return;
+    const fixed = applyRepechajeDesdeFecha1(league);
+    reparacionPendiente.current = fixed;
+    setLeague(fixed);
+  }, [league, syncing, loadError]);
+
+  // Si la corrección se aplicó y quien está en pantalla tiene la clave, queda
+  // guardada en la base. Sin clave se ve corregida pero no se escribe (las reglas
+  // de Firestore solo dejan escribir al encargado).
+  useEffect(() => {
+    const pendiente = reparacionPendiente.current;
+    if (!pendiente || !canEdit || syncing || loadError) return;
+    reparacionPendiente.current = null;
+    saveLeague(pendiente).catch((err) => showToast(err.message || 'No se pudo guardar.', 'error'));
+  }, [canEdit, league, syncing, loadError, showToast]);
 
   useEffect(() => {
     try {

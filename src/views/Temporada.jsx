@@ -129,7 +129,7 @@ function RepechajeCard({ rep, nameOf, canEdit, seasonNumber, onApply }) {
         <p className="text-xs text-slate-300">
           Resultado {rep.scoreA} - {rep.scoreB}.{' '}
           {rep.winner === 'B'
-            ? 'Ganó el Grupo B: sube a A y la pareja de A baja a B (desde la Fecha 2).'
+            ? 'Ganó el Grupo B: sube a A y la pareja de A baja a B, con efecto desde la Fecha 1.'
             : 'Ganó el Grupo A: se mantienen en sus grupos.'}
         </p>
       ) : canEdit && seasonNumber === rep.forSeason ? (

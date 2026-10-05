@@ -7,7 +7,9 @@
  *   - Desciende directo el último del A   → pasa al Grupo B
  *   - Repechaje: el penúltimo del A vs. el 2º del B (se juega como partido
  *     extra en la Fecha 1 de la temporada siguiente, con la pareja completa:
- *     el Drive y el Revés de cada lado). Si gana B, se intercambian.
+ *     el Drive y el Revés de cada lado). Si gana B, se intercambian las dos
+ *     parejas, y el intercambio rige DESDE ESA MISMA FECHA 1: el que asciende
+ *     ya juega la Fecha 1 en su grupo nuevo.
  *
  * Todo se calcula desde los resultados; el historial guarda una foto de cada
  * temporada cerrada (tabla, campeones, movimientos).
@@ -173,8 +175,9 @@ export function closeSeason(league) {
 
 /**
  * Registra el partido de repechaje. Si gana la pareja del B, intercambia
- * las dos parejas entre grupos (a partir de la Fecha 2, porque la Fecha 1 es
- * justamente la que se juega con los grupos como estaban).
+ * las dos parejas entre grupos desde la Fecha 1 (el repechaje se juega como
+ * partido extra ese mismo día, así que quien asciende ya juega la Fecha 1 en
+ * su grupo nuevo, y quien baja también).
  */
 export function applyRepechaje(league, scoreA, scoreB) {
   const rep = league.repechaje;
@@ -188,12 +191,97 @@ export function applyRepechaje(league, scoreA, scoreB) {
 
   let groups = league.groups;
   if (winner === 'B') {
-    groups = swapBetweenGroups(groups, rep.a.driveId, rep.b.driveId, { fromFecha: 2 });
-    groups = swapBetweenGroups(groups, rep.a.revesId, rep.b.revesId, { fromFecha: 2 });
+    groups = swapBetweenGroups(groups, rep.a.driveId, rep.b.driveId, { fromFecha: 1 });
+    groups = swapBetweenGroups(groups, rep.a.revesId, rep.b.revesId, { fromFecha: 1 });
   }
   return {
     ...league,
     groups,
-    repechaje: { ...rep, scoreA: String(a), scoreB: String(b), winner, done: true },
+    results: winner === 'B' ? realignFecha1Results(league.results, repechajeIdMap(rep)) : league.results,
+    repechaje: { ...rep, scoreA: String(a), scoreB: String(b), winner, done: true, appliedFrom: 1 },
+  };
+}
+
+/* ------------------------------------------- corrección de ligas viejas */
+
+/** Los ids que intercambian los dos puestos de la pareja que juega el repechaje. */
+function repechajeIdMap(rep) {
+  return {
+    [rep.a.driveId]: rep.b.driveId,
+    [rep.b.driveId]: rep.a.driveId,
+    [rep.a.revesId]: rep.b.revesId,
+    [rep.b.revesId]: rep.a.revesId,
+  };
+}
+
+/** Corrige los puestos de las fechas ya cargadas (solo los ids del repechaje). */
+function realignFecha1Results(results, map) {
+  const swapSlot = (slot) =>
+    slot
+      ? {
+          ...slot,
+          playerId: map[slot.playerId] ?? slot.playerId,
+          originalPlayerId: map[slot.originalPlayerId] ?? slot.originalPlayerId,
+        }
+      : slot;
+
+  return (results || []).map((r) =>
+    Number(r.fechaNum) !== 1
+      ? r
+      : {
+          ...r,
+          pairs: (r.pairs || []).map((p) => ({ drive: swapSlot(p.drive), reves: swapSlot(p.reves) })),
+          matches: (r.matches || []).map((m) =>
+            m.lineup
+              ? {
+                  ...m,
+                  lineup: Object.fromEntries(
+                    Object.entries(m.lineup).map(([k, v]) => [k, { drive: swapSlot(v.drive), reves: swapSlot(v.reves) }]),
+                  ),
+                }
+              : m,
+          ),
+        },
+  );
+}
+
+/**
+ * ¿La liga quedó con el repechaje aplicado desde la Fecha 2 (versión anterior)?
+ * Se corrige una sola vez: después queda marcada con `appliedFrom: 1`.
+ */
+export function needsRepechajeFecha1(league) {
+  const rep = league?.repechaje;
+  return Boolean(rep && rep.done && rep.winner === 'B' && rep.appliedFrom !== 1);
+}
+
+/**
+ * Corrige una liga que quedó con el repechaje aplicado desde la Fecha 2: los
+ * jugadores ya están en su grupo nuevo, pero las parejas de la Fecha 1 seguían
+ * armadas con la alineación vieja. Se reemplaza, en cada fecha, todo id que no
+ * pertenezca al grupo por el que le corresponde, y lo mismo en las fechas ya
+ * cargadas. No toca marcadores, apoyos, historial ni ningún otro dato.
+ */
+export function applyRepechajeDesdeFecha1(league) {
+  if (!needsRepechajeFecha1(league)) return league;
+  const rep = league.repechaje;
+  const map = repechajeIdMap(rep);
+
+  const groups = league.groups.map((g) => {
+    const ids = new Set(g.players.map((p) => p.id));
+    const fix = (id) => (ids.has(id) ? id : map[id] ?? id);
+    return {
+      ...g,
+      fechas: g.fechas.map((f) => ({
+        ...f,
+        pairs: f.pairs.map((p) => ({ driveId: fix(p.driveId), revesId: fix(p.revesId) })),
+      })),
+    };
+  });
+
+  return {
+    ...league,
+    groups,
+    results: realignFecha1Results(league.results, map),
+    repechaje: { ...rep, appliedFrom: 1 },
   };
 }
