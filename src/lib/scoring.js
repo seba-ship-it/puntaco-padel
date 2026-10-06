@@ -54,6 +54,58 @@ export function countPlayed(matches) {
   return (matches || []).reduce((acc, m) => acc + (resolveMatch(m).played ? 1 : 0), 0);
 }
 
+/* -------------------------------------------------------------------------
+   Walkover (una pareja no se presentó)
+   ------------------------------------------------------------------------- */
+
+/**
+ * Parejas que no se presentaron en una fecha. Se guarda en el resultado como
+ * la lista de índices de pareja: `result.walkovers = [3]`.
+ *
+ * Reglamento: el partido cuenta como JUGADO para las dos parejas. La que se
+ * presentó suma la victoria normal (sin extras: ni 6-0 ni tie-break ni fecha
+ * perfecta) y la que no se presentó suma 0 puntos (sin castigo de 0-6 y sin
+ * multa). El marcador no existe: no suma games a favor ni en contra.
+ */
+export function walkoverSet(result) {
+  return new Set(Array.isArray(result?.walkovers) ? result.walkovers : []);
+}
+
+/**
+ * Estado completo de un partido de una fecha:
+ *   'played'       → hay marcador cargado
+ *   'walkover'     → una pareja no se presentó: gana la que estaba
+ *   'walkoverBoth' → no se presentó ninguna de las dos
+ *   'pending'      → falta cargar
+ *   'invalid'      → marcador inválido (empate)
+ */
+export function resolveMatchFull(result, match) {
+  const absent = walkoverSet(result);
+  const absent1 = absent.has(match?.p1Idx);
+  const absent2 = absent.has(match?.p2Idx);
+
+  if (absent1 || absent2) {
+    if (absent1 && absent2) {
+      return { status: 'walkoverBoth', winnerIdx: null, g1: null, g2: null, isTieBreak: false, played: false, invalid: false };
+    }
+    return { status: 'walkover', winnerIdx: absent1 ? 1 : 0, g1: null, g2: null, isTieBreak: false, played: false, invalid: false };
+  }
+
+  const r = resolveMatch(match);
+  return { ...r, status: r.played ? 'played' : r.invalid ? 'invalid' : 'pending' };
+}
+
+/** ¿Este partido ya está resuelto: marcador cargado o walkover? */
+export function isResolved(result, match) {
+  const { status } = resolveMatchFull(result, match);
+  return status === 'played' || status === 'walkover' || status === 'walkoverBoth';
+}
+
+/** Partidos resueltos de una fecha: marcadores cargados + walkovers. */
+export function countResolved(result) {
+  return (result?.matches || []).reduce((acc, m) => acc + (isResolved(result, m) ? 1 : 0), 0);
+}
+
 export function countInvalid(matches) {
   return (matches || []).reduce((acc, m) => acc + (resolveMatch(m).invalid ? 1 : 0), 0);
 }
@@ -91,6 +143,7 @@ export function buildFechaDraft(group, fechaNum) {
       reves: emptySlot(p.revesId),
     })),
     matches: buildMatchList(),
+    walkovers: [],
   };
 }
 
@@ -121,6 +174,7 @@ function blankRow(player) {
     ptsApoyo: 0,
     ptsShutout: 0, // bonus/castigo por partidos 6-0 (positivo o negativo)
     derrotas06: 0, // partidos perdidos 0-6 (multa de 5.000 Gs.)
+    walkovers: 0, // partidos perdidos por no presentarse (no suman ni restan puntos)
   };
 }
 
@@ -130,19 +184,37 @@ function blankRow(player) {
  */
 function eachResolvedMatch(result, callback) {
   (result.matches || []).forEach((match) => {
-    const r = resolveMatch(match);
-    if (!r.played) return;
+    const r = resolveMatchFull(result, match);
+    if (r.status === 'pending' || r.status === 'invalid') return;
 
+    // Nadie se presentó: cuenta como jugado para las dos parejas, sin puntos.
+    if (r.status === 'walkoverBoth') {
+      callback({
+        match,
+        resolved: r,
+        walkover: true,
+        bothAbsent: true,
+        winnerPairIdx: null,
+        loserPairIdx: null,
+        winnerGames: null,
+        loserGames: null,
+      });
+      return;
+    }
+
+    const walkover = r.status === 'walkover';
     const winnerPairIdx = r.winnerIdx === 0 ? match.p1Idx : match.p2Idx;
     const loserPairIdx = r.winnerIdx === 0 ? match.p2Idx : match.p1Idx;
 
     callback({
       match,
       resolved: r,
+      walkover,
+      bothAbsent: false,
       winnerPairIdx,
       loserPairIdx,
-      winnerGames: r.winnerIdx === 0 ? r.g1 : r.g2,
-      loserGames: r.winnerIdx === 0 ? r.g2 : r.g1,
+      winnerGames: walkover ? null : r.winnerIdx === 0 ? r.g1 : r.g2,
+      loserGames: walkover ? null : r.winnerIdx === 0 ? r.g2 : r.g1,
     });
   });
 }
@@ -220,7 +292,23 @@ export function computeStandings(league, groupId) {
       const played = Array(PAIRS_PER_FECHA).fill(0);
       const touched = new Set();
 
-      eachResolvedMatch(result, ({ match, resolved, winnerPairIdx, loserPairIdx, winnerGames, loserGames }) => {
+      eachResolvedMatch(result, ({ match, resolved, walkover, bothAbsent, winnerPairIdx, loserPairIdx, winnerGames, loserGames }) => {
+        // Walkover sin nadie en cancha: partido jugado para las dos parejas, 0 puntos.
+        if (bothAbsent) {
+          [match.p1Idx, match.p2Idx].forEach((pairIdx) => {
+            played[pairIdx] += 1;
+            slotsForMatch(result, pairIdx, match).forEach((slot) => {
+              const row = rows.get(slot?.playerId);
+              if (!row || slotKind(slot) === 'invitado') return;
+              row.pj += 1;
+              row.ppNormal += 1;
+              row.walkovers += 1;
+              touched.add(slot.playerId);
+            });
+          });
+          return;
+        }
+
         played[winnerPairIdx] += 1;
         played[loserPairIdx] += 1;
         wins[winnerPairIdx] += 1;
@@ -231,6 +319,23 @@ export function computeStandings(league, groupId) {
             const kind = slotKind(slot);
             const row = rows.get(slot?.playerId);
             if (!row || kind === 'invitado') return;
+
+            // Walkover: cuenta como partido jugado. La pareja que se presentó
+            // suma la victoria normal (sin extras); la que no vino, 0 puntos.
+            if (walkover) {
+              row.pj += 1;
+              if (isWin) {
+                row.pg += 1;
+                row.ptsWins += scoring.victoria;
+                row.points += scoring.victoria;
+              } else {
+                row.ppNormal += 1;
+                row.walkovers += 1;
+              }
+              touched.add(slot.playerId);
+              return;
+            }
+
             const guestPartner = partnerIsGuest(slots, pos);
             const { points, part, shutoutExtra } = matchPoints(scoring, {
               kind, isWin, resolved, winnerGames, loserGames, guestPartner,
@@ -259,13 +364,15 @@ export function computeStandings(league, groupId) {
 
       // Fecha perfecta: la pareja ganó sus 4 partidos.
       // Solo lo cobra quien jugó de titular en LOS CUATRO: si el puesto lo
-      // ocuparon distintas personas, nadie hizo la fecha completa.
+      // ocuparon distintas personas, nadie hizo la fecha completa. Los
+      // walkovers no cuentan: sin rival en cancha no hay fecha perfecta.
       for (let i = 0; i < PAIRS_PER_FECHA; i++) {
         if (played[i] < PAIRS_PER_FECHA - 1 || wins[i] !== PAIRS_PER_FECHA - 1) continue;
 
         const matchesOfPair = (result.matches || []).filter(
-          (m) => (m.p1Idx === i || m.p2Idx === i) && resolveMatch(m).played,
+          (m) => (m.p1Idx === i || m.p2Idx === i) && resolveMatchFull(result, m).status === 'played',
         );
+        if (matchesOfPair.length < PAIRS_PER_FECHA - 1) continue;
 
         [0, 1].forEach((slotPos) => {
           const occupants = matchesOfPair.map((m) => slotsForMatch(result, i, m)[slotPos]);
@@ -342,9 +449,10 @@ export function buildPlayerProfile(league, groupId, playerId) {
   [...league.results]
     .sort((a, b) => a.fechaNum - b.fechaNum)
     .forEach((result) => {
-      eachResolvedMatch(result, ({ match, resolved, winnerPairIdx, loserPairIdx, winnerGames, loserGames }) => {
-        [winnerPairIdx, loserPairIdx].forEach((pairIdx, side) => {
-          const isWin = side === 0;
+      eachResolvedMatch(result, ({ match, resolved, walkover, bothAbsent, winnerPairIdx, loserPairIdx, winnerGames, loserGames }) => {
+        const sides = bothAbsent ? [match.p1Idx, match.p2Idx] : [winnerPairIdx, loserPairIdx];
+        sides.forEach((pairIdx, side) => {
+          const isWin = !bothAbsent && side === 0;
           const slots = slotsForMatch(result, pairIdx, match);
           const myIdx = slots.findIndex((s) => s?.playerId === playerId);
           if (myIdx === -1) return;
@@ -352,13 +460,17 @@ export function buildPlayerProfile(league, groupId, playerId) {
           const me = slots[myIdx];
           const kind = slotKind(me);
           const partner = slots[myIdx === 0 ? 1 : 0];
-          const rivalSlots = slotsForMatch(result, isWin ? loserPairIdx : winnerPairIdx, match);
+          const rivalSlots = slotsForMatch(
+            result,
+            bothAbsent ? (pairIdx === match.p1Idx ? match.p2Idx : match.p1Idx) : isWin ? loserPairIdx : winnerPairIdx,
+            match,
+          );
 
           const guestPartner = slotKind(partner) === 'invitado';
-          const { points } = matchPoints(scoring, {
-            kind, isWin, resolved, winnerGames, loserGames, guestPartner,
-          });
-          const isShutout = winnerGames === 6 && loserGames === 0;
+          const { points } = walkover
+            ? { points: isWin ? scoring.victoria : 0 }
+            : matchPoints(scoring, { kind, isWin, resolved, winnerGames, loserGames, guestPartner });
+          const isShutout = !walkover && winnerGames === 6 && loserGames === 0;
 
           const partnerName = nameOf(partner);
           const tally = partnerTally.get(partnerName) || { name: partnerName, played: 0, won: 0 };
@@ -374,11 +486,12 @@ export function buildPlayerProfile(league, groupId, playerId) {
             won: isWin,
             isTieBreak: resolved.isTieBreak,
             isShutout,
+            walkover,
             asApoyo: kind === 'apoyo',
             partner: partnerName,
             rivals: rivalSlots.map(nameOf).join(' / '),
-            gamesFor: isWin ? winnerGames : loserGames,
-            gamesAgainst: isWin ? loserGames : winnerGames,
+            gamesFor: walkover ? null : isWin ? winnerGames : loserGames,
+            gamesAgainst: walkover ? null : isWin ? loserGames : winnerGames,
             points,
           });
         });
@@ -429,15 +542,18 @@ export function buildFechaSummary(league, groupId, fechaNum) {
 
   const matches = (result.matches || [])
     .map((m) => {
-      const r = resolveMatch(m);
-      if (!r.played) return null;
+      const r = resolveMatchFull(result, m);
+      if (r.status === 'pending' || r.status === 'invalid') return null;
+      const walkover = r.status === 'walkover' || r.status === 'walkoverBoth';
       return {
         pair1: slotsForMatch(result, m.p1Idx, m).map(label),
         pair2: slotsForMatch(result, m.p2Idx, m).map(label),
-        g1: r.g1,
-        g2: r.g2,
+        g1: walkover ? null : r.g1,
+        g2: walkover ? null : r.g2,
         winnerIdx: r.winnerIdx,
         isTieBreak: r.isTieBreak,
+        walkover,
+        walkoverBoth: r.status === 'walkoverBoth',
       };
     })
     .filter(Boolean);

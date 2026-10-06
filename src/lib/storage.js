@@ -208,6 +208,7 @@ function migrateFromV2(old) {
         reves: toSlot(p.reves, p.originalReves),
       })),
       matches: f.matches || [],
+      walkovers: Array.isArray(f.walkovers) ? f.walkovers : [],
     };
   });
 

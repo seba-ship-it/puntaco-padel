@@ -295,7 +295,18 @@ export function downloadFechaImage(summary, scoring) {
     drawSide(m.pair1, PAD + 18, 'left', m.winnerIdx === 0);
     drawSide(m.pair2, W - PAD - 18, 'right', m.winnerIdx === 1);
 
-    // Marcador
+    // Marcador. En un walkover no hubo juego: se muestra W.O.
+    if (m.walkover) {
+      ctx.textAlign = 'center';
+      ctx.font = font(24, '800');
+      ctx.fillStyle = C.warn;
+      ctx.fillText('W.O.', mid, y + 44);
+      ctx.font = font(11, '800');
+      ctx.fillText(m.walkoverBoth ? 'NO SE PRESENTARON' : 'NO SE PRESENTÓ', mid, y + 62);
+      y += MATCH_ROW_H;
+      return;
+    }
+
     ctx.textAlign = 'center';
     ctx.font = font(30, '800');
     ctx.fillStyle = m.winnerIdx === 0 ? C.win : C.loss;

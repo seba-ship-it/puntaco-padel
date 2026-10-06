@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { Check, Trash2, Lock, ImageDown, Link2, MessageCircle, Radio } from 'lucide-react';
 import { ProgressBar, RulesPanel, SectionTitle, PAIR_COLORS, themeFor } from '../components/ui.jsx';
 import { formatDate } from '../data/defaults.js';
-import { MATCHES_PER_FECHA, countPlayed } from '../lib/scoring.js';
+import { MATCHES_PER_FECHA, countResolved } from '../lib/scoring.js';
 
 /**
  * Calendario e historial en una sola vista: cada fecha muestra su estado y
@@ -45,7 +45,8 @@ export default function Fechas({
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
         {group.fechas.map((fecha) => {
           const saved = league.results.find((r) => r.groupId === group.id && r.fechaNum === fecha.num);
-          const played = saved ? countPlayed(saved.matches) : 0;
+          const played = saved ? countResolved(saved) : 0;
+          const walkovers = saved?.walkovers?.length || 0;
           const hasDraft = Boolean(drafts[`${group.id}-${fecha.num}`]);
           const open = jornadas.find((j) => j.status === 'open' && j.groupId === group.id && j.fechaNum === fecha.num);
           const submitted = open
@@ -60,6 +61,11 @@ export default function Fechas({
                   <span className="text-xs text-slate-500">{formatDate(fecha.date)}</span>
                 </div>
                 <div className="flex items-center gap-2">
+                  {walkovers > 0 && (
+                    <span className="text-[10px] font-bold px-2 py-1 rounded-full bg-amber-500/15 text-amber-400 border border-amber-500/30">
+                      {walkovers} W.O.
+                    </span>
+                  )}
                   {hasDraft && (
                     <span className="text-[10px] font-bold px-2 py-1 rounded-full bg-sky-500/15 text-sky-400 border border-sky-500/30">
                       Borrador

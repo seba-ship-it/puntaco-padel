@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
-import { X, Check, ChevronDown, AlertTriangle, Zap, Users } from 'lucide-react';
+import { X, Check, ChevronDown, AlertTriangle, Zap, Users, FileX } from 'lucide-react';
 import { formatDate } from '../data/defaults.js';
 import { ProgressBar, PAIR_COLORS, themeFor } from '../components/ui.jsx';
-import { MATCHES_PER_FECHA, resolveMatch, slotKind, countPlayed, slotsForMatch } from '../lib/scoring.js';
+import { MATCHES_PER_FECHA, resolveMatchFull, slotKind, countResolved, slotsForMatch } from '../lib/scoring.js';
 
 /**
  * Carga de resultados de una fecha.
@@ -18,19 +18,21 @@ export default function LoadFecha({
   onSlotChange,
   onGamesChange,
   onToggleTieBreak,
+  onToggleWalkover,
   onLineupChange,
   onResetLineup,
   onSave,
   onDiscard,
 }) {
   const theme = themeFor(group.id);
-  const played = countPlayed(draft.matches);
+  const played = countResolved(draft);
   const allPlayers = [...group.players, ...(otherGroup?.players || [])];
+  const walkovers = Array.isArray(draft.walkovers) ? draft.walkovers : [];
 
   // Reglamento: máximo 1 partido de apoyo por jugador por fecha (lunes).
   const apoyoCount = new Map();
   draft.matches.forEach((m) => {
-    if (!resolveMatch(m).played) return;
+    if (resolveMatchFull(draft, m).status !== 'played') return;
     [m.p1Idx, m.p2Idx].forEach((pairIdx) => {
       slotsForMatch(draft, pairIdx, m).forEach((slot) => {
         if (slotKind(slot) === 'apoyo') apoyoCount.set(slot.playerId, (apoyoCount.get(slot.playerId) || 0) + 1);
@@ -124,6 +126,41 @@ export default function LoadFecha({
         </div>
       </details>
 
+      {/* Walkover: una pareja entera que no se presentó */}
+      <div className="bg-slate-900 border border-slate-800 rounded-xl p-3 space-y-2">
+        <div className="flex items-center gap-1.5">
+          <FileX className="w-3.5 h-3.5 text-amber-400" />
+          <span className="text-xs font-bold text-slate-300">¿Faltó una pareja entera? Marcá el walkover</span>
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-2">
+          {draft.pairs.map((pair, idx) => {
+            const off = walkovers.includes(idx);
+            const names = `${nameOf(pair.drive)} / ${nameOf(pair.reves)}`;
+            return (
+              <button
+                key={idx}
+                type="button"
+                onClick={() => onToggleWalkover(idx)}
+                title={off ? 'La pareja se presentó: volver a cargar el marcador' : 'Esta pareja no se presentó: sus 4 partidos se dan por perdidos'}
+                className={`text-left px-3 py-2 rounded-lg border text-[11px] font-bold transition-colors ${
+                  off
+                    ? 'bg-amber-500/15 border-amber-500/40 text-amber-300'
+                    : 'bg-slate-950 border-slate-800 text-slate-400 hover:border-amber-500/40 hover:text-amber-300'
+                }`}
+              >
+                <span className="block text-[10px] uppercase tracking-wide opacity-70">Pareja {idx + 1}</span>
+                <span className="block truncate">{names}</span>
+                <span className="block mt-0.5">{off ? 'W.O. · sin puntos' : 'Se presentó'}</span>
+              </button>
+            );
+          })}
+        </div>
+        <p className="text-[11px] text-slate-500 leading-relaxed">
+          El walkover cuenta como partido jugado para las dos parejas: la que se presentó suma la victoria ({scoring.victoria}{' '}
+          pts) y la que no vino suma 0, sin castigo de 0-6 ni multa.
+        </p>
+      </div>
+
       <div className="space-y-2">
         <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wide px-1">
           Marcadores · {MATCHES_PER_FECHA} partidos
@@ -142,13 +179,14 @@ export default function LoadFecha({
             onToggleTieBreak={() => onToggleTieBreak(match.id)}
             onLineupChange={(pairIdx, field, slot) => onLineupChange(match.id, pairIdx, field, slot)}
             onResetLineup={() => onResetLineup(match.id)}
+            walkovers={walkovers}
           />
         ))}
       </div>
 
       <div className="sticky bottom-0 -mx-4 px-4 py-3 bg-slate-950/95 backdrop-blur border-t border-slate-800 flex items-center justify-between gap-3">
         <span className="text-xs text-slate-500">
-          {played} de {MATCHES_PER_FECHA} cargados
+          {played} de {MATCHES_PER_FECHA} {walkovers.length > 0 ? `resueltos (${walkovers.length} walkover)` : 'cargados'}
         </span>
         <button
           type="submit"
@@ -244,13 +282,22 @@ function MatchRow({
   onToggleTieBreak,
   onLineupChange,
   onResetLineup,
+  walkovers = [],
 }) {
   const [editing, setEditing] = useState(false);
-  const r = resolveMatch(match);
+  const r = resolveMatchFull(draft, match);
+  const isWalkover = r.status === 'walkover' || r.status === 'walkoverBoth';
+  const absent1 = walkovers.includes(match.p1Idx);
+  const absent2 = walkovers.includes(match.p2Idx);
   const hasLineup = Boolean(match.lineup && Object.keys(match.lineup).length > 0);
 
-  const sideClass = (idx) =>
-    r.played && r.winnerIdx === idx ? 'text-white font-bold' : r.played ? 'text-slate-500' : 'text-slate-300';
+  const sideClass = (idx) => {
+    if (isWalkover) {
+      const absent = idx === match.p1Idx ? absent1 : absent2;
+      return absent ? 'text-amber-400/70 line-through' : 'text-white font-bold';
+    }
+    return r.played && r.winnerIdx === idx ? 'text-white font-bold' : r.played ? 'text-slate-500' : 'text-slate-300';
+  };
 
   const label = (pairIdx) => slotsForMatch(draft, pairIdx, match).map(nameOf).join(' / ');
 
@@ -260,26 +307,40 @@ function MatchRow({
   ];
 
   return (
-    <div className={`bg-slate-950 border rounded-xl p-3 ${r.invalid ? 'border-rose-500/50' : 'border-slate-800'}`}>
+    <div className={`bg-slate-950 border rounded-xl p-3 ${
+      r.invalid ? 'border-rose-500/50' : isWalkover ? 'border-amber-500/30' : 'border-slate-800'
+    }`}>
       <div className="flex items-center gap-3">
         <span className="text-[10px] font-bold text-slate-600 w-5 shrink-0 tabular-nums">{index + 1}</span>
 
         <div className="flex-1 min-w-0 space-y-1.5">
-          {sides.map((side, i) => (
-            <div key={side.field} className="flex items-center gap-2">
-              <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${side.color?.dot || 'bg-slate-500'}`} />
-              <span className={`text-xs truncate flex-1 ${sideClass(i)}`}>{label(side.pairIdx)}</span>
-              <input
-                type="number"
-                inputMode="numeric"
-                min="0"
-                value={side.value}
-                onChange={(e) => onGamesChange(side.field, e.target.value)}
-                aria-label={`Games de ${label(side.pairIdx)}`}
-                className="w-11 shrink-0 bg-slate-900 border border-slate-700 rounded-md py-1 text-center text-sm font-bold text-white focus:outline-none focus:border-slate-400"
-              />
-            </div>
-          ))}
+          {sides.map((side) => {
+            const absent = side.pairIdx === match.p1Idx ? absent1 : absent2;
+            return (
+              <div key={side.field} className="flex items-center gap-2">
+                <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${side.color?.dot || 'bg-slate-500'}`} />
+                <span className={`text-xs truncate flex-1 ${sideClass(side.pairIdx)}`}>{label(side.pairIdx)}</span>
+                {isWalkover ? (
+                  <span
+                    className={`w-14 shrink-0 text-center text-[11px] font-black ${absent ? 'text-amber-400' : 'text-emerald-400'}`}
+                    title={absent ? 'No se presentó' : `Suma la victoria (${scoring.victoria} pts)`}
+                  >
+                    {absent ? 'W.O.' : `+${scoring.victoria}`}
+                  </span>
+                ) : (
+                  <input
+                    type="number"
+                    inputMode="numeric"
+                    min="0"
+                    value={side.value}
+                    onChange={(e) => onGamesChange(side.field, e.target.value)}
+                    aria-label={`Games de ${label(side.pairIdx)}`}
+                    className="w-11 shrink-0 bg-slate-900 border border-slate-700 rounded-md py-1 text-center text-sm font-bold text-white focus:outline-none focus:border-slate-400"
+                  />
+                )}
+              </div>
+            );
+          })}
         </div>
       </div>
 
@@ -287,6 +348,12 @@ function MatchRow({
         {r.invalid && (
           <span className="text-[10px] text-rose-400 font-semibold flex items-center gap-1">
             <AlertTriangle className="w-3 h-3" /> Marcador inválido (no puede haber empate)
+          </span>
+        )}
+        {isWalkover && (
+          <span className="text-[10px] text-amber-400 font-semibold flex items-center gap-1">
+            <FileX className="w-3 h-3" />
+            {r.status === 'walkoverBoth' ? 'No se presentó ninguna pareja' : 'Walkover · el que se presentó suma la victoria'}
           </span>
         )}
         {r.played && (

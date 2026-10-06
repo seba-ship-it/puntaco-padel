@@ -42,6 +42,15 @@ export default function Reglamento({ scoring, fees }) {
       ],
     },
     {
+      title: 'Walkover (una pareja no se presenta)',
+      list: [
+        'La pareja que no se presenta pierde sus 4 partidos de la fecha: 0 puntos y sin multa.',
+        'La pareja que se presenta gana esos partidos: suma la victoria normal, sin extras (ni 6-0 ni tie-break ni jornada perfecta).',
+        'Los partidos cuentan como jugados para las dos parejas (suman PJ).',
+      ],
+      note: 'Igual que una ausencia avisada: se marca la pareja entera desde la carga de la fecha, y la tabla se recalcula sola.',
+    },
+    {
       title: 'Fechas y partidos',
       list: [
         'Se juega los lunes, de 19:00 a 22:00 hs. Tolerancia máxima hasta las 20:00 hs.',

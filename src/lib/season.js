@@ -16,7 +16,7 @@
  */
 
 import { buildCalendar, nextWeeklyDates } from '../data/defaults.js';
-import { MATCHES_PER_FECHA, computeStandings, countPlayed } from './scoring.js';
+import { MATCHES_PER_FECHA, computeStandings, countResolved } from './scoring.js';
 
 export const FECHAS_PER_SEASON = 5;
 const ROLES = ['Drive', 'Revés'];
@@ -38,7 +38,7 @@ export function seasonProgress(league) {
     for (let n = 1; n <= FECHAS_PER_SEASON; n++) {
       total += 1;
       const result = league.results.find((r) => r.groupId === g.id && r.fechaNum === n);
-      if (countPlayed(result?.matches) === MATCHES_PER_FECHA) done += 1;
+      if (countResolved(result) === MATCHES_PER_FECHA) done += 1;
     }
   });
   return { done, total, complete: total > 0 && done === total };

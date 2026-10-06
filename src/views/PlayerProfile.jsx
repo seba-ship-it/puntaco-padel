@@ -63,6 +63,13 @@ export default function PlayerProfile({ profile, group, onBack }) {
           />
         </div>
 
+        {totals.walkovers > 0 && (
+          <p className="mt-3 text-[11px] font-semibold text-amber-400 bg-amber-500/10 border border-amber-500/30 rounded-lg px-3 py-2">
+            {totals.walkovers} partido{totals.walkovers > 1 ? 's' : ''} perdido{totals.walkovers > 1 ? 's' : ''} por
+            walkover (no se presentó la pareja): cuentan como jugados y no suman ni restan puntos.
+          </p>
+        )}
+
         {streakType && (
           <div className="mt-3 flex items-center gap-2 text-xs">
             {streakType === 'W' ? (
@@ -179,13 +186,14 @@ export default function PlayerProfile({ profile, group, onBack }) {
                         {m.won ? '6-0 (+bonus)' : '0-6 (−castigo)'}
                       </span>
                     )}
+                    {m.walkover && <span className="text-amber-400 font-semibold">walkover</span>}
                     {m.asApoyo && <span className="text-sky-400 font-semibold">apoyo</span>}
                   </div>
                 </div>
 
                 <div className="text-right shrink-0">
                   <div className="font-mono text-sm font-bold text-slate-300 tabular-nums">
-                    {m.gamesFor}-{m.gamesAgainst}
+                    {m.walkover ? 'W.O.' : `${m.gamesFor}-${m.gamesAgainst}`}
                   </div>
                   <div
                     className={`text-[11px] font-bold ${

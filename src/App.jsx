@@ -8,7 +8,7 @@ import {
   buildMatchList,
   computeStandings,
   countInvalid,
-  countPlayed,
+  countResolved,
   emptySlot,
   buildPlayerProfile,
   buildFechaSummary,
@@ -247,13 +247,13 @@ export default function App() {
 
   const fechasJugadas = useMemo(
     () =>
-      league.results.filter((r) => r.groupId === group.id && countPlayed(r.matches) > 0).length,
+      league.results.filter((r) => r.groupId === group.id && countResolved(r) > 0).length,
     [league, group.id],
   );
 
   const fechasCompletas = useMemo(
     () =>
-      league.results.filter((r) => r.groupId === group.id && countPlayed(r.matches) === 10).length,
+      league.results.filter((r) => r.groupId === group.id && countResolved(r) === 10).length,
     [league, group.id],
   );
 
@@ -292,7 +292,7 @@ export default function App() {
 
       const saved = league.results.find((r) => r.groupId === gId && r.fechaNum === fechaNum);
       if (saved) {
-        return { ...prev, [key]: { pairs: saved.pairs, matches: saved.matches } };
+        return { ...prev, [key]: { pairs: saved.pairs, matches: saved.matches, walkovers: saved.walkovers || [] } };
       }
       const fresh = buildFechaDraft(targetGroup, fechaNum);
       return fresh ? { ...prev, [key]: fresh } : prev;
@@ -349,6 +349,24 @@ export default function App() {
     }));
   };
 
+  /**
+   * Marca o desmarca que una pareja no se presentó (walkover) en esta fecha.
+   * Sus partidos quedan resueltos: el rival suma la victoria y la pareja ausente
+   * cuenta el partido como jugado, sin puntos. Los marcadores de esos partidos
+   * se borran, porque no hubo juego.
+   */
+  const handleToggleWalkover = (pairIdx) => {
+    updateDraft(editingKey, (d) => {
+      const actuales = Array.isArray(d.walkovers) ? d.walkovers : [];
+      const absent = !actuales.includes(pairIdx);
+      const walkovers = absent ? [...actuales, pairIdx].sort((a, b) => a - b) : actuales.filter((i) => i !== pairIdx);
+      const matches = absent
+        ? d.matches.map((m) => (m.p1Idx === pairIdx || m.p2Idx === pairIdx ? { ...m, p1Games: '', p2Games: '', tieBreakOverride: null } : m))
+        : d.matches;
+      return { ...d, walkovers, matches };
+    });
+  };
+
   const handleSaveFecha = () => {
     if (!editing || !editingKey) return;
     if (!canEdit || loadError) {
@@ -370,9 +388,9 @@ export default function App() {
       return;
     }
 
-    const played = countPlayed(editing.matches);
+    const played = countResolved(editing);
     if (played === 0) {
-      showToast('Cargá al menos un marcador antes de guardar.', 'error');
+      showToast('Cargá al menos un marcador (o un walkover) antes de guardar.', 'error');
       return;
     }
 
@@ -383,7 +401,13 @@ export default function App() {
       ...prev,
       results: [
         ...prev.results.filter((r) => !(r.groupId === gId && r.fechaNum === fechaNum)),
-        { groupId: gId, fechaNum, pairs: editing.pairs, matches: editing.matches },
+        {
+          groupId: gId,
+          fechaNum,
+          pairs: editing.pairs,
+          matches: editing.matches,
+          walkovers: editing.walkovers || [],
+        },
       ].sort((a, b) => (a.groupId === b.groupId ? a.fechaNum - b.fechaNum : a.groupId.localeCompare(b.groupId))),
     }));
 
@@ -463,7 +487,7 @@ export default function App() {
     const targetGroup = league.groups.find((g) => g.id === j.groupId);
     const saved = league.results.find((r) => r.groupId === j.groupId && r.fechaNum === j.fechaNum);
     const base = saved
-      ? { pairs: saved.pairs, matches: saved.matches }
+      ? { pairs: saved.pairs, matches: saved.matches, walkovers: saved.walkovers || [] }
       : buildFechaDraft(targetGroup, j.fechaNum);
     const draft = {
       ...base,
@@ -873,6 +897,7 @@ export default function App() {
             onSlotChange={handleSlotChange}
             onGamesChange={handleGamesChange}
             onToggleTieBreak={handleToggleTieBreak}
+            onToggleWalkover={handleToggleWalkover}
             onLineupChange={handleLineupChange}
             onResetLineup={handleResetLineup}
             onSave={handleSaveFecha}
