@@ -147,6 +147,38 @@ export function buildFechaDraft(group, fechaNum) {
   };
 }
 
+/**
+ * La formación que realmente se juega en una fecha: la del resultado guardado
+ * —con los apoyos e invitados que cargó el admin— o, si todavía no hay
+ * resultado, la del calendario.
+ *
+ * La usan las pantallas que no tienen el borrador del editor a mano (la lista
+ * de Fechas y el link público de la jornada), para que muestren los mismos
+ * nombres que se ven al cargar los resultados. Si se leyera el calendario, un
+ * invitado que reemplazó a un titular no aparecería nunca.
+ */
+export function fechaFormation(league, group, fechaNum) {
+  const saved = (league?.results || []).find((r) => r.groupId === group.id && r.fechaNum === fechaNum);
+  if (saved?.pairs?.length) return saved;
+  const fecha = (group.fechas || []).find((f) => f.num === fechaNum);
+  if (!fecha) return null;
+  return {
+    pairs: fecha.pairs.map((p) => ({ drive: emptySlot(p.driveId), reves: emptySlot(p.revesId) })),
+    matches: [],
+  };
+}
+
+/** Nombre de un puesto para mostrar: titular, apoyo (otro jugador del grupo) o invitado externo. */
+export function slotName(slot, groups) {
+  if (!slot) return '—';
+  if (!slot.playerId) return slot.guestName?.trim() || 'Invitado';
+  for (const g of groups || []) {
+    const p = g.players.find((x) => x.id === slot.playerId);
+    if (p) return p.name;
+  }
+  return slot.playerId;
+}
+
 /* -------------------------------------------------------------------------
    Tabla de posiciones
    ------------------------------------------------------------------------- */

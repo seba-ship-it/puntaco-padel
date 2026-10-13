@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { Check, Lock } from 'lucide-react';
 import { PAIR_COLORS, themeFor } from '../components/ui.jsx';
 import { formatDate } from '../data/defaults.js';
-import { buildMatchList } from '../lib/scoring.js';
+import { buildMatchList, fechaFormation, slotsForMatch, slotName } from '../lib/scoring.js';
 import { subscribeToJornada, submitJornadaMatch } from '../lib/storage.js';
 
 const NAME_KEY = 'puntako-nombre-jugador';
@@ -65,7 +65,9 @@ export default function JornadaPublica({ token, league }) {
     );
   }
 
-  const nameOf = (id) => group.players.find((p) => p.id === id)?.name || '—';
+  // La formación que se juega: la del resultado guardado (con invitados y
+  // apoyos) o, si la fecha todavía no se guardó, la del calendario.
+  const formation = fechaFormation(league, group, fecha.num);
   const matches = buildMatchList();
 
   const submit = async (matchId, a, b) => {
@@ -104,8 +106,8 @@ export default function JornadaPublica({ token, league }) {
             key={m.id}
             index={i}
             m={m}
-            pairs={fecha.pairs}
-            nameOf={nameOf}
+            formation={formation}
+            groups={league.groups}
             saved={jornada.matches?.[m.id]}
             onSubmit={(a, b) => submit(m.id, a, b)}
           />
@@ -125,7 +127,7 @@ function Aviso({ titulo, texto }) {
   );
 }
 
-function PartidoCard({ index, m, pairs, nameOf, saved, onSubmit }) {
+function PartidoCard({ index, m, formation, groups, saved, onSubmit }) {
   const [a, setA] = useState(saved?.p1Games ?? '');
   const [b, setB] = useState(saved?.p2Games ?? '');
   const timer = useRef(null);
@@ -152,10 +154,10 @@ function PartidoCard({ index, m, pairs, nameOf, saved, onSubmit }) {
     }, 700);
   };
 
-  const side = (idx) => {
-    const p = pairs[idx];
-    return `${nameOf(p.driveId)} / ${nameOf(p.revesId)}`;
-  };
+  const side = (idx) =>
+    slotsForMatch(formation, idx, m)
+      .map((slot) => `${slotName(slot, groups)}${slot && !slot.playerId ? ' (inv.)' : ''}`)
+      .join(' / ');
   const done = saved && saved.p1Games !== '' && saved.p2Games !== '';
   const tie = a !== '' && a === b;
 

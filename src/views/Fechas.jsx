@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { Check, Trash2, Lock, ImageDown, Link2, MessageCircle, Radio } from 'lucide-react';
 import { ProgressBar, RulesPanel, SectionTitle, PAIR_COLORS, themeFor } from '../components/ui.jsx';
 import { formatDate } from '../data/defaults.js';
-import { MATCHES_PER_FECHA, countResolved } from '../lib/scoring.js';
+import { MATCHES_PER_FECHA, countResolved, fechaFormation, slotName } from '../lib/scoring.js';
 
 /**
  * Calendario e historial en una sola vista: cada fecha muestra su estado y
@@ -28,7 +28,13 @@ export default function Fechas({
   const [rulesOpen, setRulesOpen] = useState(false);
   const theme = themeFor(group.id);
 
-  const playerName = (id) => group.players.find((p) => p.id === id)?.name || '—';
+  /** Un puesto de la pareja: titular, apoyo o invitado (con su marca). */
+  const pairNames = (slot) => (
+    <>
+      {slotName(slot, league.groups)}
+      {slot && !slot.playerId && <span className="text-slate-500 font-normal"> (inv.)</span>}
+    </>
+  );
 
   return (
     <div className="space-y-4 pk-fade">
@@ -76,12 +82,12 @@ export default function Fechas({
               </div>
 
               <div className="p-3 space-y-1.5 flex-1">
-                {fecha.pairs.map((p, i) => (
+                {(fechaFormation(league, group, fecha.num)?.pairs || []).map((pair, i) => (
                   <div key={i} className="flex items-center gap-2 text-xs">
                     <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${PAIR_COLORS[i]?.dot || 'bg-slate-500'}`} />
-                    <span className="text-blue-300 font-semibold">{playerName(p.driveId)}</span>
+                    <span className="text-blue-300 font-semibold">{pairNames(pair.drive)}</span>
                     <span className="text-slate-700">+</span>
-                    <span className="text-purple-300 font-semibold">{playerName(p.revesId)}</span>
+                    <span className="text-purple-300 font-semibold">{pairNames(pair.reves)}</span>
                   </div>
                 ))}
               </div>
