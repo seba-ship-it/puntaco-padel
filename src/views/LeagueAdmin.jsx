@@ -15,6 +15,8 @@ export default function LeagueAdmin({
   onAddPlayer,
   onUpdatePlayer,
   onDeletePlayer,
+  onMovePlayer,
+  onRebuildCalendar,
   onUpdateFecha,
   onSetSeasonDate,
   onUpdateScoring,
@@ -68,6 +70,7 @@ export default function LeagueAdmin({
           onAddPlayer={onAddPlayer}
           onUpdatePlayer={onUpdatePlayer}
           onDeletePlayer={onDeletePlayer}
+          onMovePlayer={onMovePlayer}
           accent={theme.bg}
         />
       )}
@@ -78,6 +81,7 @@ export default function LeagueAdmin({
           league={league}
           onUpdateFecha={onUpdateFecha}
           onSetSeasonDate={onSetSeasonDate}
+          onRebuildCalendar={onRebuildCalendar}
           accent={theme.bg}
         />
       )}
@@ -93,7 +97,7 @@ export default function LeagueAdmin({
 
 /* ----------------------------------------------------------- Jugadores */
 
-function PlayersTab({ group, league, onAddPlayer, onUpdatePlayer, onDeletePlayer, accent }) {
+function PlayersTab({ group, league, onAddPlayer, onUpdatePlayer, onDeletePlayer, onMovePlayer, accent }) {
   const [name, setName] = useState('');
   const [role, setRole] = useState(ROLES[0]);
 
@@ -184,6 +188,18 @@ function PlayersTab({ group, league, onAddPlayer, onUpdatePlayer, onDeletePlayer
                       </option>
                     ))}
                   </select>
+                  <select
+                    value={group.id}
+                    onChange={(e) => onMovePlayer(p.id, e.target.value)}
+                    title="Pasar a otro grupo (rearma el calendario)"
+                    className="bg-slate-950 border border-slate-700 rounded-lg px-2 py-1 text-xs text-slate-300 focus:outline-none focus:border-slate-500"
+                  >
+                    {league.groups.map((g) => (
+                      <option key={g.id} value={g.id}>
+                        {g.name}
+                      </option>
+                    ))}
+                  </select>
                   <span className="text-[10px] text-slate-600 tabular-nums w-16 text-right shrink-0">
                     {count > 0 ? `${count} part.` : 'sin datos'}
                   </span>
@@ -211,7 +227,7 @@ function PlayersTab({ group, league, onAddPlayer, onUpdatePlayer, onDeletePlayer
 
 /* ---------------------------------------------------------- Calendario */
 
-function CalendarTab({ group, league, onUpdateFecha, onSetSeasonDate, accent }) {
+function CalendarTab({ group, league, onUpdateFecha, onSetSeasonDate, onRebuildCalendar, accent }) {
   const drives = group.players.filter((p) => p.role === 'Drive');
   const reveses = group.players.filter((p) => p.role === 'Revés');
 
@@ -225,6 +241,20 @@ function CalendarTab({ group, league, onUpdateFecha, onSetSeasonDate, accent }) 
             (con los ascensos y descensos y los lunes siguientes); acá podés corregir cualquier día.
           </p>
         </div>
+        {onRebuildCalendar && (
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={() => onRebuildCalendar(group.id)}
+              className="px-3 py-1.5 rounded-lg text-xs font-bold border border-slate-700 text-slate-300 hover:bg-slate-800 transition-colors"
+            >
+              Rearmar calendario de {group.name}
+            </button>
+            <span className="text-[11px] text-slate-500">
+              Usalo después de agregar o borrar jugadores. Solo funciona si el grupo no tiene fechas cargadas.
+            </span>
+          </div>
+        )}
         <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
           {group.fechas.map((fecha) => (
             <label key={fecha.num} className="text-[10px] uppercase font-bold text-slate-500">

@@ -30,7 +30,14 @@ import {
   deleteJornada,
   subscribeToJornadas,
 } from './lib/storage.js';
-import { closeSeason, applyRepechaje, seasonProgress } from './lib/season.js';
+import {
+  closeSeason,
+  applyRepechaje,
+  setRepechajePairs,
+  movePlayerToGroup,
+  rebuildGroupCalendar,
+  seasonProgress,
+} from './lib/season.js';
 import { CLOUD_CONFIGURED } from './lib/firebaseClient.js';
 import { useAuth } from './lib/auth.js';
 import { downloadStandingsImage, downloadFechaImage, downloadSeasonImage } from './lib/exportImage.js';
@@ -533,6 +540,37 @@ export default function App() {
 
   /* ------------------------------------------------------ calendario */
 
+  /** Pasa al jugador a otro grupo (con su calendario rearmado). Antes valida, después pregunta. */
+  const handleMovePlayer = (playerId, toGroupId) => {
+    const player = league.groups.flatMap((g) => g.players).find((p) => p.id === playerId);
+    const to = league.groups.find((g) => g.id === toGroupId);
+    let next;
+    try {
+      next = movePlayerToGroup(league, playerId, toGroupId);
+    } catch (err) {
+      showToast(err.message, 'error');
+      return;
+    }
+    if (next === league) return;
+    if (!window.confirm(`¿Pasar a ${player?.name || 'este jugador'} al ${to?.name || toGroupId}? Se rearma el calendario de los dos grupos con las mismas fechas: los cruces cambian.`)) return;
+    setLeague(next);
+    showToast(`${player?.name || 'Jugador'} pasó al ${to?.name || toGroupId}. Calendario rearmado.`);
+  };
+
+  /** Rearma el calendario de un grupo con sus jugadores actuales (tras agregar o borrar a alguien). */
+  const handleRebuildCalendar = (gId) => {
+    let next;
+    try {
+      next = rebuildGroupCalendar(league, gId);
+    } catch (err) {
+      showToast(err.message, 'error');
+      return;
+    }
+    if (!window.confirm('¿Rearmar el calendario de este grupo con los jugadores actuales? Se recalculan los cruces de sus fechas.')) return;
+    setLeague(next);
+    showToast('Calendario rearmado con los jugadores actuales.');
+  };
+
   const handleUpdateFecha = (gId, fechaNum, patch) => {
     patchGroup(gId, (g) => ({
       ...g,
@@ -576,6 +614,15 @@ export default function App() {
       setDrafts({});
       setEditingKey(null);
       showToast(`Temporada ${league.seasonNumber} cerrada. Empieza la ${league.seasonNumber + 1}.`);
+    } catch (err) {
+      showToast(err.message, 'error');
+    }
+  };
+
+  const handleSetRepechajePairs = (pairs) => {
+    try {
+      setLeague(setRepechajePairs(league, pairs));
+      showToast('Parejas del repechaje actualizadas.');
     } catch (err) {
       showToast(err.message, 'error');
     }
@@ -854,6 +901,7 @@ export default function App() {
             canEdit={canEdit && !loadError}
             onCloseSeason={requireAuth(handleCloseSeason)}
             onApplyRepechaje={requireAuth(handleApplyRepechaje)}
+            onSetRepechajePairs={requireAuth(handleSetRepechajePairs)}
             onExportSeason={handleExportSeason}
           />
         )}
@@ -914,6 +962,8 @@ export default function App() {
             onAddPlayer={requireAuth(handleAddPlayer)}
             onUpdatePlayer={requireAuth(handleUpdatePlayer)}
             onDeletePlayer={requireAuth(handleDeletePlayer)}
+            onMovePlayer={requireAuth(handleMovePlayer)}
+            onRebuildCalendar={requireAuth(handleRebuildCalendar)}
             onUpdateFecha={requireAuth(handleUpdateFecha)}
             onSetSeasonDate={requireAuth(handleSetSeasonDate)}
             onUpdateScoring={requireAuth(handleUpdateScoring)}

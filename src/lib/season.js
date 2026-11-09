@@ -202,6 +202,32 @@ export function applyRepechaje(league, scoreA, scoreB) {
   };
 }
 
+/**
+ * Cambia quién juega el repechaje mientras no se haya jugado (por ejemplo, si
+ * una pareja se da de baja o no puede jugar). `pairs` trae "a", "b" o ambos,
+ * cada uno como { driveId, revesId }. Cada pareja tiene que salir de su grupo:
+ * la del A, del Grupo A; la del B, del Grupo B. No mueve a nadie de grupo.
+ */
+export function setRepechajePairs(league, pairs) {
+  const rep = league.repechaje;
+  if (!rep) throw new Error('No hay repechaje en esta liga.');
+  if (rep.done) throw new Error('El repechaje ya se jugó: no se puede cambiar la pareja.');
+
+  const next = { ...rep };
+  for (const side of ['a', 'b']) {
+    if (!pairs?.[side]) continue;
+    const { driveId, revesId } = pairs[side];
+    const groupId = side === 'a' ? 'A' : 'B';
+    const group = league.groups.find((g) => g.id === groupId);
+    const has = (id, role) => Boolean(group?.players.some((p) => p.id === id && p.role === role));
+    if (!has(driveId, 'Drive') || !has(revesId, 'Revés')) {
+      throw new Error(`Elegí un Drive y un Revés del Grupo ${groupId}.`);
+    }
+    next[side] = { driveId, revesId };
+  }
+  return { ...league, repechaje: next };
+}
+
 /* ------------------------------------------- corrección de ligas viejas */
 
 /** Los ids que intercambian los dos puestos de la pareja que juega el repechaje. */
@@ -283,5 +309,59 @@ export function applyRepechajeDesdeFecha1(league) {
     groups,
     results: realignFecha1Results(league.results, map),
     repechaje: { ...rep, appliedFrom: 1 },
+  };
+}
+
+/* ------------------------------------ jugadores: mover de grupo y calendario */
+
+/** ¿El grupo ya tiene fechas cargadas? Entonces no se puede rearmar su calendario. */
+const groupHasResults = (league, groupId) => league.results.some((r) => r.groupId === groupId);
+
+/** El grupo con su calendario rearmado para `players`, en las mismas fechas. */
+function rebuiltGroup(group, players) {
+  const cal = buildCalendar(players, group.fechas.map((f) => f.date));
+  return {
+    ...group,
+    players,
+    fechas: group.fechas.map((f, i) => ({ ...f, pairs: cal[i].pairs })),
+  };
+}
+
+/**
+ * Pasa a un jugador a otro grupo y rearma el calendario de los dos, con las
+ * mismas fechas. Solo se puede si ninguno de los dos tiene fechas cargadas.
+ * No toca el repechaje: si una pareja queda en el grupo que no es, se corrige
+ * con setRepechajePairs.
+ */
+export function movePlayerToGroup(league, playerId, toGroupId) {
+  const from = league.groups.find((g) => g.players.some((p) => p.id === playerId));
+  if (!from) throw new Error('No encuentro a ese jugador en la liga.');
+  const to = league.groups.find((g) => g.id === toGroupId);
+  if (!to) throw new Error('Ese grupo no existe.');
+  if (to.id === from.id) return league;
+  if (groupHasResults(league, from.id) || groupHasResults(league, to.id)) {
+    throw new Error('Ya hay fechas cargadas en alguno de los dos grupos: no se puede mover al jugador.');
+  }
+
+  const player = from.players.find((p) => p.id === playerId);
+  const groups = league.groups.map((g) => {
+    if (g.id === from.id) return rebuiltGroup(g, g.players.filter((p) => p.id !== playerId));
+    if (g.id === to.id) return rebuiltGroup(g, [...g.players, player]);
+    return g;
+  });
+  return { ...league, groups };
+}
+
+/**
+ * Rearma el calendario de un grupo con sus jugadores actuales (después de
+ * agregar o borrar a alguien). Solo si el grupo no tiene fechas cargadas.
+ */
+export function rebuildGroupCalendar(league, groupId) {
+  if (groupHasResults(league, groupId)) {
+    throw new Error('Ya hay fechas cargadas en ese grupo: no se puede rearmar el calendario.');
+  }
+  return {
+    ...league,
+    groups: league.groups.map((g) => (g.id === groupId ? rebuiltGroup(g, g.players) : g)),
   };
 }

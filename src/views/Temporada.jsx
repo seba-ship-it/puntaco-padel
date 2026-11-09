@@ -10,11 +10,12 @@ const ROLE_STYLE = { Drive: 'text-blue-300', Revés: 'text-purple-300' };
  * Temporada en curso (cierre, ascensos, descensos y repechaje) e historial de
  * las temporadas anteriores.
  */
-export default function Temporada({ league, canEdit, onCloseSeason, onApplyRepechaje, onExportSeason }) {
+export default function Temporada({ league, canEdit, onCloseSeason, onApplyRepechaje, onSetRepechajePairs, onExportSeason }) {
   const progress = seasonProgress(league);
   const movements = planMovements(league);
   const rep = league.repechaje;
-  const nameOf = (id) => league.groups.flatMap((g) => g.players).find((p) => p.id === id)?.name || id;
+  // Un jugador borrado de la liga no aparece: se avisa en vez de mostrar el id.
+  const nameOf = (id) => league.groups.flatMap((g) => g.players).find((p) => p.id === id)?.name || '(no está en la liga)';
 
   return (
     <div className="space-y-5 pk-fade">
@@ -24,7 +25,15 @@ export default function Temporada({ league, canEdit, onCloseSeason, onApplyRepec
       />
 
       {rep && (
-        <RepechajeCard rep={rep} nameOf={nameOf} canEdit={canEdit} seasonNumber={league.seasonNumber} onApply={onApplyRepechaje} />
+        <RepechajeCard
+          rep={rep}
+          league={league}
+          nameOf={nameOf}
+          canEdit={canEdit}
+          seasonNumber={league.seasonNumber}
+          onApply={onApplyRepechaje}
+          onSetPairs={onSetRepechajePairs}
+        />
       )}
 
       <section className="bg-slate-900 border border-slate-800 rounded-xl p-4 space-y-3">
@@ -103,10 +112,12 @@ function MovementsPreview({ movements, provisional }) {
   );
 }
 
-function RepechajeCard({ rep, nameOf, canEdit, seasonNumber, onApply }) {
+function RepechajeCard({ rep, league, nameOf, canEdit, seasonNumber, onApply, onSetPairs }) {
   const [a, setA] = useState('');
   const [b, setB] = useState('');
+  const [draft, setDraft] = useState(null); // parejas en edición: { a: {driveId, revesId}, b: {...} }
   const pair = (x) => `${nameOf(x.driveId)} / ${nameOf(x.revesId)}`;
+  const canChangePairs = canEdit && !rep.done && seasonNumber === rep.forSeason && Boolean(onSetPairs);
 
   return (
     <section className="bg-amber-500/5 border border-amber-500/30 rounded-xl p-4 space-y-3">
@@ -125,7 +136,28 @@ function RepechajeCard({ rep, nameOf, canEdit, seasonNumber, onApply }) {
         </div>
       </div>
 
-      {rep.done ? (
+      {canChangePairs && !draft && (
+        <button
+          type="button"
+          onClick={() => setDraft({ a: { ...rep.a }, b: { ...rep.b } })}
+          className="px-3 py-1.5 rounded-lg text-xs font-bold border border-amber-500/40 text-amber-300 hover:bg-amber-500/10 transition-colors"
+        >
+          Cambiar parejas del repechaje
+        </button>
+      )}
+
+      {draft ? (
+        <RepechajeEditor
+          draft={draft}
+          setDraft={setDraft}
+          league={league}
+          onCancel={() => setDraft(null)}
+          onSave={() => {
+            onSetPairs(draft);
+            setDraft(null);
+          }}
+        />
+      ) : rep.done ? (
         <p className="text-xs text-slate-300">
           Resultado {rep.scoreA} - {rep.scoreB}.{' '}
           {rep.winner === 'B'
@@ -159,6 +191,65 @@ function RepechajeCard({ rep, nameOf, canEdit, seasonNumber, onApply }) {
         <p className="text-xs text-slate-400">Pendiente: se juega como partido extra en la primera fecha de la temporada.</p>
       )}
     </section>
+  );
+}
+
+/** Elige Drive y Revés para cada lado del repechaje (solo jugadores de su grupo). */
+function RepechajeEditor({ draft, setDraft, league, onSave, onCancel }) {
+  const sides = [
+    { key: 'a', groupId: 'A', label: 'Grupo A · penúltimos', color: 'text-emerald-400' },
+    { key: 'b', groupId: 'B', label: 'Grupo B · segundos', color: 'text-pink-400' },
+  ];
+  const complete = sides.every(({ key }) => draft[key].driveId && draft[key].revesId);
+
+  const select = (key, field, role, players) => (
+    <label className="block text-[10px] uppercase font-bold text-slate-500">
+      {role}
+      <select
+        value={draft[key][field]}
+        onChange={(e) => setDraft({ ...draft, [key]: { ...draft[key], [field]: e.target.value } })}
+        className="mt-1 block w-full bg-slate-950 border border-slate-700 rounded-lg px-2 py-1.5 text-sm text-white normal-case font-normal"
+      >
+        <option value="">— elegir —</option>
+        {players.filter((p) => p.role === role).map((p) => (
+          <option key={p.id} value={p.id}>{p.name}</option>
+        ))}
+      </select>
+    </label>
+  );
+
+  return (
+    <div className="space-y-3">
+      <div className="grid sm:grid-cols-2 gap-2 text-xs">
+        {sides.map(({ key, groupId, label, color }) => {
+          const players = league.groups.find((g) => g.id === groupId)?.players || [];
+          return (
+            <div key={key} className="rounded-lg bg-slate-950 border border-slate-800 p-3 space-y-2">
+              <p className={`text-[10px] uppercase font-bold ${color}`}>{label}</p>
+              {select(key, 'driveId', 'Drive', players)}
+              {select(key, 'revesId', 'Revés', players)}
+            </div>
+          );
+        })}
+      </div>
+      <div className="flex flex-wrap gap-2">
+        <button
+          type="button"
+          onClick={onSave}
+          disabled={!complete}
+          className="px-4 py-2 rounded-lg text-xs font-bold bg-amber-400 text-slate-950 disabled:opacity-40"
+        >
+          Guardar parejas
+        </button>
+        <button
+          type="button"
+          onClick={onCancel}
+          className="px-4 py-2 rounded-lg text-xs font-bold border border-slate-700 text-slate-300 hover:bg-slate-800 transition-colors"
+        >
+          Cancelar
+        </button>
+      </div>
+    </div>
   );
 }
 
