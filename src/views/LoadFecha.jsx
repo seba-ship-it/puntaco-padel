@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { X, Check, ChevronDown, AlertTriangle, Zap, Users, FileX } from 'lucide-react';
 import { formatDate } from '../data/defaults.js';
 import { ProgressBar, PAIR_COLORS, themeFor } from '../components/ui.jsx';
-import { MATCHES_PER_FECHA, resolveMatchFull, slotKind, countResolved, slotsForMatch } from '../lib/scoring.js';
+import { MATCHES_PER_FECHA, resolveMatchFull, slotKind, countResolved, slotsForMatch, isAbsentSlot, absentSlot } from '../lib/scoring.js';
 
 /**
  * Carga de resultados de una fecha.
@@ -41,8 +41,17 @@ export default function LoadFecha({
   });
   const apoyoAbuse = Array.from(apoyoCount.entries()).filter(([, n]) => n > 1);
 
+  // Partidos jugados donde sigue figurando "Ausente": falta elegir quién jugó.
+  const sinDefinir = [];
+  draft.matches.forEach((m, i) => {
+    if (resolveMatchFull(draft, m).status !== 'played') return;
+    const falta = [m.p1Idx, m.p2Idx].some((pairIdx) => slotsForMatch(draft, pairIdx, m).some(isAbsentSlot));
+    if (falta) sinDefinir.push(i + 1);
+  });
+
   const nameOf = (slot) => {
     if (!slot) return '—';
+    if (isAbsentSlot(slot)) return 'Ausente';
     if (!slot.playerId) return slot.guestName?.trim() || 'Invitado';
     return allPlayers.find((p) => p.id === slot.playerId)?.name || '—';
   };
@@ -87,10 +96,20 @@ export default function LoadFecha({
         </p>
       )}
 
+      {sinDefinir.length > 0 && (
+        <p className="text-xs text-amber-400 font-semibold bg-amber-500/10 border border-amber-500/30 rounded-lg px-3 py-2 flex items-start gap-2">
+          <AlertTriangle className="w-4 h-4 shrink-0" />
+          <span>
+            Falta elegir quién jugó en {sinDefinir.length === 1 ? 'el partido' : 'los partidos'} {sinDefinir.join(', ')}. Abrí
+            “¿Faltó alguien en este partido?” y elegí al apoyo. Hasta entonces el puesto no suma puntos.
+          </span>
+        </p>
+      )}
+
       {/* Cambios de jugadores: plegado, porque lo normal es que jueguen los titulares */}
       <details className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden group">
         <summary className="px-4 py-3 cursor-pointer text-xs font-bold text-slate-300 flex items-center justify-between hover:bg-slate-800/40 transition-colors">
-          <span>¿Faltó alguien? Cambiar las parejas</span>
+          <span>¿Faltó alguien? Cambiar las parejas (o marcar “Ausente” y elegir por partido)</span>
           <ChevronDown className="w-4 h-4 text-slate-500 group-open:rotate-180 transition-transform" />
         </summary>
         <div className="px-4 pb-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
@@ -110,6 +129,7 @@ export default function LoadFecha({
                 players={group.players}
                 otherGroup={otherGroup}
                 scoring={scoring}
+                allowAbsent
                 onChange={(next) => onSlotChange(idx, 'drive', next)}
               />
               <SlotPicker
@@ -119,6 +139,7 @@ export default function LoadFecha({
                 players={group.players}
                 otherGroup={otherGroup}
                 scoring={scoring}
+                allowAbsent
                 onChange={(next) => onSlotChange(idx, 'reves', next)}
               />
             </div>
@@ -204,16 +225,19 @@ export default function LoadFecha({
  * Elige quién ocupó un puesto: el titular, un "apoyo" (jugador del mismo grupo y
  * del mismo puesto), o un invitado de afuera.
  */
-function SlotPicker({ label, roleColor, slot, players, otherGroup, scoring, onChange }) {
+function SlotPicker({ label, roleColor, slot, players, otherGroup, scoring, onChange, allowAbsent = false }) {
   const kind = slotKind(slot);
-  const isGuest = !slot.playerId;
+  const isAbsent = isAbsentSlot(slot);
+  const isGuest = !slot.playerId && !isAbsent;
   const original = players.find((p) => p.id === slot.originalPlayerId);
 
   const handleSelect = (value) => {
-    if (value === '__guest__') {
-      onChange({ ...slot, playerId: null, guestName: '' });
+    if (value === '__absent__') {
+      onChange(absentSlot(slot.originalPlayerId));
+    } else if (value === '__guest__') {
+      onChange({ playerId: null, guestName: '', originalPlayerId: slot.originalPlayerId });
     } else {
-      onChange({ ...slot, playerId: value, guestName: null });
+      onChange({ playerId: value, guestName: null, originalPlayerId: slot.originalPlayerId });
     }
   };
 
@@ -226,6 +250,11 @@ function SlotPicker({ label, roleColor, slot, players, otherGroup, scoring, onCh
             Apoyo · {scoring.apoyoDerrota}/{scoring.apoyoVictoria} pts
           </span>
         )}
+        {isAbsent && (
+          <span className="text-[9px] font-bold text-amber-400 bg-amber-500/10 border border-amber-500/30 px-1.5 py-0.5 rounded">
+            Ausente
+          </span>
+        )}
         {isGuest && (
           <span className="text-[9px] font-bold text-slate-400 bg-slate-800 border border-slate-700 px-1.5 py-0.5 rounded">
             Invitado · 0 pts
@@ -234,10 +263,12 @@ function SlotPicker({ label, roleColor, slot, players, otherGroup, scoring, onCh
       </div>
 
       <select
-        value={isGuest ? '__guest__' : slot.playerId}
+        value={isAbsent ? '__absent__' : isGuest ? '__guest__' : slot.playerId}
         onChange={(e) => handleSelect(e.target.value)}
         className="w-full bg-slate-900 border border-slate-700 rounded-lg px-2 py-1.5 text-xs text-white font-semibold focus:outline-none focus:border-slate-500"
       >
+        {allowAbsent && <option value="__absent__">Ausente · elegir en cada partido</option>}
+        {isAbsent && !allowAbsent && <option value="__absent__">— Elegir quién jugó —</option>}
         {original && <option value={original.id}>{original.name} (titular)</option>}
         {/* Reglamento: el apoyo es del mismo grupo y del mismo puesto (drive por drive, revés por revés). */}
         <optgroup label={`Apoyo (${original?.role || 'mismo puesto'} de este grupo)`}>
@@ -249,6 +280,17 @@ function SlotPicker({ label, roleColor, slot, players, otherGroup, scoring, onCh
               </option>
             ))}
         </optgroup>
+        {otherGroup && (
+          <optgroup label={`Apoyo desde ${otherGroup.name}`}>
+            {otherGroup.players
+              .filter((p) => !/^vacante/i.test(p.name) && (!original || p.role === original.role))
+              .map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.name}
+                </option>
+              ))}
+          </optgroup>
+        )}
         <option value="__guest__">Invitado de afuera…</option>
       </select>
 

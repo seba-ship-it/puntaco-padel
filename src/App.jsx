@@ -232,8 +232,16 @@ export default function App() {
 
   const fechasJugadas = useMemo(
     () =>
-      league.results.filter((r) => r.groupId === group.id && countResolved(r) > 0).length,
-    [league, group.id],
+      league.results.filter((r) => {
+        if (countResolved(r) === 0) return false;
+        if (r.groupId === group.id) return true;
+        // Una fecha de otro grupo también cuenta si alguien de este grupo jugó de apoyo en ella.
+        const ids = new Set(group.players.map((p) => p.id));
+        return (r.pairs || []).some((pair) => ids.has(pair.drive?.playerId) || ids.has(pair.reves?.playerId))
+          || (r.matches || []).some((m) =>
+            Object.values(m.lineup || {}).some((l) => ids.has(l?.drive?.playerId) || ids.has(l?.reves?.playerId)));
+      }).length,
+    [league, group.id, group.players],
   );
 
   const fechasCompletas = useMemo(

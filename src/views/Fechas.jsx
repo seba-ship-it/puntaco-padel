@@ -32,7 +32,7 @@ export default function Fechas({
   const pairNames = (slot) => (
     <>
       {slotName(slot, league.groups)}
-      {slot && !slot.playerId && <span className="text-slate-500 font-normal"> (inv.)</span>}
+      {slot && !slot.playerId && !slot.absent && <span className="text-slate-500 font-normal"> (inv.)</span>}
     </>
   );
 

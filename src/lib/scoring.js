@@ -129,6 +129,18 @@ export function slotKind(slot) {
   return slot.playerId === slot.originalPlayerId ? 'titular' : 'apoyo';
 }
 
+/**
+ * Puesto "ausente": el titular faltó y todavía no se dijo quién lo cubrió. Se
+ * elige partido por partido. Mientras tanto no puntúa nadie (como un invitado).
+ */
+export function isAbsentSlot(slot) {
+  return Boolean(slot && !slot.playerId && slot.absent);
+}
+
+export function absentSlot(originalPlayerId) {
+  return { playerId: null, guestName: null, originalPlayerId, absent: true };
+}
+
 export function emptySlot(originalPlayerId) {
   return { playerId: originalPlayerId, guestName: null, originalPlayerId };
 }
@@ -171,6 +183,7 @@ export function fechaFormation(league, group, fechaNum) {
 /** Nombre de un puesto para mostrar: titular, apoyo (otro jugador del grupo) o invitado externo. */
 export function slotName(slot, groups) {
   if (!slot) return '—';
+  if (isAbsentSlot(slot)) return 'Ausente';
   if (!slot.playerId) return slot.guestName?.trim() || 'Invitado';
   for (const g of groups || []) {
     const p = g.players.find((x) => x.id === slot.playerId);
@@ -467,6 +480,7 @@ export function buildPlayerProfile(league, groupId, playerId) {
   const allPlayers = league.groups.flatMap((g) => g.players);
   const nameOf = (slot) => {
     if (!slot) return '—';
+    if (isAbsentSlot(slot)) return 'Ausente';
     if (!slot.playerId) return slot.guestName?.trim() || 'Invitado';
     return allPlayers.find((p) => p.id === slot.playerId)?.name || slot.playerId;
   };
@@ -567,6 +581,7 @@ export function buildFechaSummary(league, groupId, fechaNum) {
   const allPlayers = league.groups.flatMap((g) => g.players);
   const label = (slot) => {
     const kind = slotKind(slot);
+    if (isAbsentSlot(slot)) return 'Ausente';
     if (kind === 'invitado') return `${slot?.guestName?.trim() || 'Invitado'} (inv.)`;
     const name = allPlayers.find((p) => p.id === slot.playerId)?.name || '—';
     return kind === 'apoyo' ? `${name} (apoyo)` : name;
